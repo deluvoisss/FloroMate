@@ -1,0 +1,169 @@
+.encyclopedia-page {
+  display: flex;
+  min-height: calc(100vh - 70px);
+  background: #f5f7fa;
+  position: relative;
+}
+
+.sidebar-toggle-mobile {
+  display: none;
+  position: fixed;
+  top: 80px;
+  left: 10px;
+  z-index: 999;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.encyclopedia-content {
+  flex: 1;
+  padding: 40px;
+  overflow-y: auto;
+}
+
+.results-header {
+  margin-bottom: 30px;
+}
+
+.results-header h2 {
+  font-size: 2rem;
+  color: #2d3748;
+  margin: 0 0 10px 0;
+  font-weight: 700;
+}
+
+.results-header p {
+  font-size: 1rem;
+  color: #718096;
+  margin: 5px 0;
+}
+
+.results-header strong {
+  color: #667eea;
+  font-weight: 700;
+}
+
+.no-results {
+  color: #a0aec0;
+  font-style: italic;
+  padding: 20px;
+  text-align: center;
+  background: #edf2f7;
+  border-radius: 12px;
+  margin-top: 20px;
+}
+
+.plants-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+.encyclopedia-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-size: 1.3rem;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.encyclopedia-error {
+  padding: 40px;
+  text-align: center;
+  background: #fff5f5;
+  border-radius: 12px;
+  color: #c53030;
+  max-width: 500px;
+  margin: 40px auto;
+}
+
+.encyclopedia-error button {
+  margin-top: 20px;
+  padding: 12px 24px;
+  background: #c53030;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.2s;
+}
+
+.encyclopedia-error button:hover {
+  transform: scale(1.05);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 40px;
+  padding: 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.pagination-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.pagination-btn:disabled {
+  background: #cbd5e0;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pagination-info {
+  color: #4a5568;
+  font-weight: 600;
+}
+
+@media (max-width: 1024px) {
+  .plants-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar-toggle-mobile {
+    display: block;
+  }
+
+  .encyclopedia-page {
+    flex-direction: column;
+  }
+
+  .encyclopedia-content {
+    padding: 20px;
+    margin-top: 50px;
+  }
+
+  .plants-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+}

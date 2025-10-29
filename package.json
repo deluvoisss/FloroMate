@@ -1,0 +1,49 @@
+{
+    "name": "floromate",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "start:plantnet": "node server/server-plantnet.js",
+        "start:gigachat": "node server/server-gigachat.js",
+        "start:servers": "concurrently \"npm run start:plantnet\" \"npm run start:gigachat\"",
+        "start:frontend": "react-scripts start",
+        "start": "npm run start:servers",
+        "start:all": "concurrently \"npm run start:servers\" \"npm run start:frontend\"",
+        "build": "react-scripts build"
+    },
+    "dependencies": {
+        "axios": "^1.13.1",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^5.1.0",
+        "form-data": "^4.0.4",
+        "https": "^1.0.0",
+        "mime-types": "^3.0.1",
+        "multer": "^2.0.2",
+        "node-fetch": "^2.7.0",
+        "openai": "^6.7.0",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-router-dom": "^6.30.1",
+        "react-scripts": "5.0.1",
+        "uuid": "^13.0.0"
+    },
+    "devDependencies": {
+        "@types/react": "^18.0.0",
+        "@types/react-dom": "^18.0.0",
+        "concurrently": "^9.2.1",
+        "typescript": "^4.9.5"
+    },
+    "browserslist": {
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    }
+}
