@@ -2,25 +2,27 @@ const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
 const FormData = require('form-data');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 const mime = require('mime-types');
 const https = require('https');
-const http = require('http');
-const { HttpProxyAgent } = require('http-proxy-agent');
-const { HttpsProxyAgent } = require('https-proxy-agent');
 const { v4: uuidv4 } = require('uuid');
 const dotenv = require('dotenv');
 
+// Загружаем .env
 dotenv.config();
 
 const app = express();
 const PORT = 3001;
 
+// Переменные из .env
 const API_KEY = process.env.API_KEY;
 const PROXY_SERVER = process.env.PROXY_SERVER;
 const GIGACHAT_AUTH_KEY = process.env.GIGACHAT_AUTH_KEY;
 const GIGACHAT_SCOPE = 'GIGACHAT_API_PERS';
 
+// Проверка переменных окружения
 if (!API_KEY) {
   console.error('❌ Ошибка: API_KEY не найден в .env');
   process.exit(1);
@@ -34,98 +36,77 @@ if (!GIGACHAT_AUTH_KEY) {
 console.log('✅ API_KEY загружен');
 console.log('✅ GIGACHAT_AUTH_KEY загружен');
 if (PROXY_SERVER) {
-  console.log('🔌 Прокси сервер:', PROXY_SERVER);
+  console.log('🔌 Proxy сервер:', PROXY_SERVER);
 }
 
+// Middleware
 app.use(cors({
-  origin: 'http://localhost:8099',
+  origin: 'http://localhost:8099', // Ваш Bro.js порт
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true
 }));
 
 app.use(express.json());
 
+// Multer конфигурация для растений
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-// ========================
-// PROXY & HTTPS AGENTS
-// ========================
-
-function getAgents() {
-  if (!PROXY_SERVER) {
-    // БЕЗ прокси
-    return {
-      httpAgent: new http.Agent({ keepAlive: true }),
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: false,
-        keepAlive: true
-      })
-    };
-  }
-
-  // С прокси
-  const httpAgent = new HttpProxyAgent(PROXY_SERVER);
-  const httpsAgent = new HttpsProxyAgent(PROXY_SERVER);
-  
-  return { httpAgent, httpsAgent };
-}
+// HTTPS агент
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false
+});
 
 // ========================
 // PLANT RECOGNITION ROUTES
 // ========================
 
 async function identifyPlant(images) {
+  const form = new FormData();
   try {
-    console.log('🌱 Начинаем подготовку изображений...');
-    
-    const form = new FormData();
-    
-    // Добавляем изображения
-    images.forEach((img, idx) => {
-      let ext = mime.extension(img.mimetype) || 'jpg';
-      let normalizedExt = ext === 'jpeg' ? 'jpg' : ext;
+   images.forEach((img, idx) => {
+  let ext = mime.extension(img.mimetype) || 'bin';
+  let normalizedExt = ext === 'jpg' ? 'jpeg' : ext;
+  let contentType = normalizedExt === 'jpeg' ? 'image/jpeg' : img.mimetype;
 
-      console.log(`📷 Изображение ${idx}: ${img.organ} (${normalizedExt})`);
+  form.append('images', img.buffer, {
+    filename: `image${idx}.${normalizedExt}`,
+    contentType: contentType
+  });
+});
 
-      form.append('images', img.buffer, {
-        filename: `plant${idx}.${normalizedExt}`,
-        contentType: img.mimetype
-      });
+// Добавить все органы одним вызовом append с массивом строк:
+images.forEach(img => form.append('organs', img.organ));
 
-      form.append('organs', img.organ);
-    });
 
-    console.log('🚀 Отправляем запрос к PlantNet API...');
+    const agent = PROXY_SERVER ? new HttpsProxyAgent(PROXY_SERVER) : undefined;
 
-    const agents = getAgents();
-    
-    const response = await axios.post(
+    const response = await fetch(
       `https://my-api.plantnet.org/v2/identify/all?api-key=${API_KEY}`,
-      form,
       {
+        method: 'POST',
+        body: form,
+        agent,
         headers: form.getHeaders(),
-        httpAgent: agents.httpAgent,
-        httpsAgent: agents.httpsAgent,
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-        timeout: 60000  // 60 секунд
       }
     );
 
-    console.log('✅ Результат успешно получен:', response.data.results?.length, 'совпадений');
-    return response.data;
-    
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('❌ PlantNet response error:', response.status, text);
+      throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+
+    return await response.json();
   } catch (error) {
-    console.error('❌ Ошибка PlantNet:', error.response?.status, error.response?.data || error.message);
-    
-    const errorMsg = error.response?.data?.message || error.message;
-    throw new Error(`PlantNet ошибка: ${errorMsg}`);
+    console.error('❌ Ошибка PlantNet:', error);
+    throw error;
   }
 }
+
 
 app.post('/api/identify', upload.fields([
   { name: 'flower', maxCount: 1 },
@@ -133,20 +114,14 @@ app.post('/api/identify', upload.fields([
 ]), async (req, res) => {
   try {
     console.log('🌿 Получен запрос на определение растения');
-    console.log('📦 Файлы:', Object.keys(req.files || {}));
     
     if (!req.files || (!req.files['flower'] && !req.files['leaf'])) {
-      console.error('❌ Нет изображений');
-      return res.status(400).json({ 
-        error: 'Загрузите хотя бы одно изображение',
-        suggestion: 'Выберите фото цветка или листа'
-      });
+      return res.status(400).json({ error: 'Загрузите хотя бы одно изображение' });
     }
     
     const images = [];
     
     if (req.files['flower']?.[0]) {
-      console.log('✓ Обнаружено фото цветка');
       images.push({
         buffer: req.files['flower'][0].buffer,
         mimetype: req.files['flower'][0].mimetype,
@@ -155,7 +130,6 @@ app.post('/api/identify', upload.fields([
     }
     
     if (req.files['leaf']?.[0]) {
-      console.log('✓ Обнаружено фото листа');
       images.push({
         buffer: req.files['leaf'][0].buffer,
         mimetype: req.files['leaf'][0].mimetype,
@@ -163,18 +137,11 @@ app.post('/api/identify', upload.fields([
       });
     }
     
-    console.log(`🔄 Всего изображений: ${images.length}`);
     const data = await identifyPlant(images);
-    
-    console.log('✅ Отправляем результат клиенту');
     res.json(data);
-    
   } catch (error) {
-    console.error('❌ Ошибка в /api/identify:', error);
-    
     res.status(500).json({
-      error: error.message || 'Ошибка обработки запроса',
-      suggestion: 'Проверьте подключение к интернету и прокси',
+      error: error.message,
       timestamp: new Date().toISOString()
     });
   }
