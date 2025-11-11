@@ -10,6 +10,7 @@ pipeline {
             steps {
                 sh 'node -v'
                 sh 'npm -v'
+                 sh 'mkdir -p dist && cp public/index.html dist/'
                 script {
                     String tag = sh(returnStdout: true, script: 'git tag --contains').trim()
                     String branchName = sh(returnStdout: true, script: 'git rev-parse --abbrev-ref HEAD').trim()
