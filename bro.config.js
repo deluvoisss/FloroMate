@@ -7,7 +7,7 @@ module.exports = {
       publicPath: `/static/${pkg.name}/${process.env.VERSION || pkg.version}/`,
     },
     devServer: {
-      historyApiFallback: true, // ← ДОБАВИТЬ! Для корректной работы React Router
+      historyApiFallback: true, 
       hot: true,
       port: 8099,
     },
@@ -27,7 +27,7 @@ module.exports = {
   
   features: {
     "floromate": {
-      // Добавьте фичи здесь если нужны
+    
     },
   },
   

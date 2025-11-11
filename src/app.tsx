@@ -14,6 +14,8 @@ import Auth from './pages/Auth';
 import './App.css';
 
 const App: React.FC = () => {
+  // ✅ Используйте publicPath из конфига
+  // Должно совпадать с publicPath в brojs.config
   const basePath = '/floromate';
 
   return (
@@ -25,17 +27,22 @@ const App: React.FC = () => {
             <Route path="/" element={<Navigate to="/mainpage" replace />} />
             <Route path="/mainpage" element={<MainPage />} />
             <Route path="/encyclopedia" element={<Encyclopedia />} />
+            
             {/* Узнать по фото */}
             <Route path="/recognition1" element={<PlantRecognition />} />
             <Route path="/recognition2" element={<DiseaseDetection />} />
+            
             {/* Мастерская ландшафта */}
             <Route path="/landscapedesign" element={<LandscapeDesign />} />
             <Route path="/konstructor" element={<LandscapeConstructor />} />
+            
             {/* Остальные страницы */}
             <Route path="/ourteam" element={<OurTeam />} />
             <Route path="/privategarden" element={<PrivateGarden />} />
             <Route path="/subscription" element={<Subscription />} />
             <Route path="/auth" element={<Auth />} />
+            
+            {/* Fallback маршрут */}
             <Route path="*" element={<Navigate to="/mainpage" replace />} />
           </Routes>
         </main>
