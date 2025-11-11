@@ -81,7 +81,7 @@ const PlantRecognition: React.FC = () => {
       }
 
       // ОБНОВЛЁННЫЙ АДРЕС - теперь один сервер на порту 3001
-      const response = await fetch('/api/identify', {
+      const response = await fetch('http://localhost:3001/api/identify', {
         method: 'POST',
         body: formData,
       });
