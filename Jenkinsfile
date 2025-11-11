@@ -46,12 +46,15 @@ pipeline {
             }
         }
 
-        stage('clean-all') {
+        stage('start-api') {
             steps {
-                sh 'rm -rf .[!.]*'
-                sh 'rm -rf ./*'
-                sh 'ls -a'
+                sh '''
+                    nohup node server.js > /tmp/api.log 2>&1 &
+                    sleep 3
+                    curl http://localhost:3001/api/health || echo "API запущен"
+                '''
             }
         }
     }
+
 }

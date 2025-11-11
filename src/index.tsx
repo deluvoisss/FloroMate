@@ -5,6 +5,18 @@ import ReactDOM from 'react-dom/client';
   import './index.css';
 import App from './app';
   
+
+declare global {
+  interface Window {
+    API_CONFIG: {
+      PLANT_API: string;
+    };
+  }
+}
+
+window.API_CONFIG = {
+  PLANT_API: window.location.origin
+};
 export default () => <App/>;
   
 let rootElement: ReactDOM.Root
@@ -19,6 +31,7 @@ export const mount = (Component, element = document.getElementById('app')) => {
       })
   }
 };
+
 
 export const unmount = () => {
   rootElement.unmount();
