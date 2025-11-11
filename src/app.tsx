@@ -14,7 +14,7 @@ import Auth from './pages/Auth';
 import './App.css';
 
 const App: React.FC = () => {
-  const basePath = '/flors';
+  const basePath = '/floromate';
 
   return (
     <Router basename={basePath}>
