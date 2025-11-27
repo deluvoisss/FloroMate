@@ -12,7 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 const dotenv = require('dotenv');
 
 // Загружаем .env
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const app = express();
 const PORT = 3001;
