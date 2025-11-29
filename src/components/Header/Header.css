@@ -16,6 +16,81 @@
   justify-content: space-between;
 }
 
+.nav-item {
+  font-size: 16px;
+  color: #FBFBFB;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s;
+  background: rgba(72, 89, 53, 0.1);
+  display: inline-block;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: rgba(147, 162, 103, 0.2);
+  color: #FBFBFB;
+  transform: translateY(-2px);
+}
+
+.nav-item.active {
+  background: rgba(202, 219, 183, 0.25);
+  color: #FBFBFB;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(202, 219, 183, 0.3);
+}
+
+
+.nav-item-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-item-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 10px; /* Буферная зона */
+  background: transparent;
+  z-index: 999; /* Ниже dropdown-menu */
+  pointer-events: auto; /* Ловит события мыши */
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: linear-gradient(135deg, #93A267 0%, #485935 100%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  padding: 6px 0;
+  min-width: 220px;
+  z-index: 1000;
+  margin-top: 4px; /* небольшой отступ, но не слишком большой */
+  border: 1px solid rgba(202, 219, 183, 0.3);
+}
+
+
+.dropdown-item {
+  display: block;
+  padding: 10px 18px;
+  text-decoration: none;
+  color: #FBFBFB;
+  font-size: 15px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+
+.dropdown-item:hover {
+  background: rgba(147, 162, 103, 0.2);
+  color: #FBFBFB;
+}
+
+
 .nav-link-logo {
   display: flex;
   align-items: center;
@@ -95,6 +170,7 @@
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   background: linear-gradient(135deg, #9aab73 0%, #7a915d 100%);
+  color: white;
 }
 
 .login-button.active {

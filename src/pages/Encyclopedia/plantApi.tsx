@@ -1,64 +1,107 @@
-import { Plant, Filters, FilterType } from '../../types/plant';
-import plantsData from './plantsData';
+import { Plant, Filters } from '../../types/plant';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 interface FetchPlantsResult {
   plants: Plant[];
   totalPages: number;
 }
 
-function filterPlants(filters: Filters, data: Plant[] = plantsData): Plant[] {
-  let filtered = data;
-  
-  if (filters.colors && filters.colors.length > 0) {
-    filtered = filtered.filter((plant: Plant) => filters.colors.includes(plant.color));
-  }
-  
-  if (filters.habitats && filters.habitats.length > 0) {
-    filtered = filtered.filter((plant: Plant) => filters.habitats.includes(plant.habitat));
-  }
-  
-  if (filters.sizes && filters.sizes.length > 0) {
-    filtered = filtered.filter((plant: Plant) => filters.sizes.includes(plant.size));
-  }
-  
-  return filtered;
-}
-
 export const fetchPlants = async (filters: Filters, page: number = 1): Promise<FetchPlantsResult> => {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  const filtered = filterPlants(filters);
-  const pageSize = 12;
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const start = (page - 1) * pageSize;
-  const paginatedPlants = filtered.slice(start, start + pageSize);
-  
-  return { plants: paginatedPlants, totalPages };
+  try {
+    const params = new URLSearchParams();
+    
+    if (filters.colors && filters.colors.length > 0) {
+      params.append('colors', filters.colors.join(','));
+    }
+    if (filters.habitats && filters.habitats.length > 0) {
+      params.append('habitats', filters.habitats.join(','));
+    }
+    if (filters.sizes && filters.sizes.length > 0) {
+      params.append('sizes', filters.sizes.join(','));
+    }
+    
+    params.append('page', page.toString());
+    params.append('limit', '12');
+    
+    const response = await fetch(`${API_BASE_URL}/plants?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return { plants: data.plants, totalPages: data.totalPages };
+  } catch (error) {
+    console.error('Error fetching plants:', error);
+    throw error;
+  }
 };
 
 export const fetchPlantDetails = async (plantId: number | string): Promise<Plant> => {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  const plant = plantsData.find(p => String(p.id) === String(plantId));
-  if (!plant) throw new Error('Растение не найдено');
-  
-  return plant;
+  try {
+    const response = await fetch(`${API_BASE_URL}/plants/${plantId}`);
+    
+    if (!response.ok) {
+      throw new Error('Plant not found');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching plant details:', error);
+    throw error;
+  }
 };
 
 export const searchPlants = async (query: string): Promise<Plant[]> => {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  if (!query) return plantsData;
-  
-  const searchLower = query.trim().toLowerCase();
-  return plantsData.filter(plant =>
-    plant.name.toLowerCase().includes(searchLower) ||
-    plant.scientificName.toLowerCase().includes(searchLower)
-  );
+  try {
+    if (!query.trim()) {
+      const result = await fetchPlants({colors: [], habitats: [], sizes: []}, 1);
+      return result.plants;
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/plants/search?query=${encodeURIComponent(query)}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error searching plants:', error);
+    throw error;
+  }
+};
+
+export const addRecognizedPlant = async (plantData: {
+  scientificName: string;
+  genus?: string;
+  family?: string;
+  confidence?: number;
+}): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/plants/recognize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(plantData),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error adding recognized plant:', error);
+    throw error;
+  }
 };
 
 export default {
   fetchPlants,
   fetchPlantDetails,
-  searchPlants
+  searchPlants,
+  addRecognizedPlant
 };

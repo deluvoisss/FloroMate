@@ -109,51 +109,44 @@ const Header: React.FC = () => {
 
           {/* Узнать по фото */}
           <li
-            onMouseEnter={() => handleMenuEnter('photo')}
-            onMouseLeave={handleMenuLeave}
-            style={{ position: 'relative' }}
+            className="nav-item-wrapper"
+            onMouseEnter={() => setOpenMenu('recognition')}
+            onMouseLeave={() => setOpenMenu(null)}
           >
-            <Link 
-              to="/recognition1" 
-              className={`nav-link ${isRecognitionActive ? 'active' : ''}`}
-            >
+            <span className={`nav-item ${isRecognitionActive ? 'active' : ''}`}>
               Узнать по фото
-            </Link>
-            <div className={`popup-menu ${openMenu === 'photo' ? 'active' : ''}`}>
-              <ul>
-                <li>
-                  <Link to="/recognition1">Распознать растение</Link>
-                </li>
-                <li>
-                  <Link to="/recognition2">Определить болезнь</Link>
-                </li>
-              </ul>
-            </div>
+            </span>
+            {openMenu === 'recognition' && (
+              <div className="dropdown-menu">
+                <Link to="/recognition1" className="dropdown-item">
+                  Распознавание растения
+                </Link>
+                <Link to="/recognition2" className="dropdown-item">
+                  Распознавание болезни растения
+                </Link>
+              </div>
+            )}
           </li>
 
           {/* Мастерская ландшафта */}
           <li 
-            onMouseEnter={() => handleMenuEnter('landscape')}
-            onMouseLeave={handleMenuLeave}
-            style={{ position: 'relative' }}
+            className="nav-item-wrapper"
+            onMouseEnter={() => setOpenMenu('landscape')}
+            onMouseLeave={() => setOpenMenu(null)}
           >
-            <Link 
-              to="/landscapedesign" 
-              className={`nav-link ${isLandscapeActive ? 'active' : ''}`}
-            >
+            <span className={`nav-item ${isLandscapeActive ? 'active' : ''}`}>
               Мастерская ландшафта
-            </Link>
-
-            <div className={`popup-menu ${openMenu === 'landscape' ? 'active' : ''}`}>
-              <ul>
-                <li>
-                  <Link to="/landscapedesign">Ландшафт по фото</Link>
-                </li>
-                <li>
-                  <Link to="/konstructor">Конструктор</Link>
-                </li>
-              </ul>
-            </div>
+            </span>
+            {openMenu === 'landscape' && (
+              <div className="dropdown-menu">
+                <Link to="/landscapedesign" className="dropdown-item">
+                  Дизайн ландшафта
+                </Link>
+                <Link to="/konstructor" className="dropdown-item">
+                  Конструктор
+                </Link>
+              </div>
+            )}
           </li>
         </ul>
 

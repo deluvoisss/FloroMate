@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './PlantRecognition.css';
+import plantApiService from '../Encyclopedia/plantApi';
 
 interface PlantResult {
   species?: {
@@ -112,7 +113,28 @@ const PlantRecognition: React.FC = () => {
         setResults([]);
         setBestMatch(null);
       }
-    } catch (error) {
+      if (data.results && data.results.length > 0) {
+        const bestMatch = data.results[0];
+        
+        try {
+          const result = await plantApiService.addRecognizedPlant({
+            scientificName: bestMatch.species.scientificNameWithoutAuthor,
+            genus: bestMatch.genus?.scientificNameWithoutAuthor,
+            family: bestMatch.family?.scientificNameWithoutAuthor,
+            confidence: bestMatch.score * 100
+          });
+          
+          if (result.isNew) {
+            console.log('✅ Новое растение добавлено в базу данных');
+          } else {
+            console.log('ℹ️ Растение уже существует в базе данных');
+          }
+        } catch (dbError) {
+          console.error('❌ Ошибка при добавлении в БД:', dbError);
+        }
+      }
+    } 
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
       console.error('❌ Ошибка запроса:', error);
       setStatus({
