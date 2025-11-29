@@ -7,6 +7,42 @@ interface FetchPlantsResult {
   totalPages: number;
 }
 
+// Получить фото через серверный прокси Perenual
+export const fetchPlantImage = async (scientificName: string): Promise<string> => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/plants/photo?scientificName=${encodeURIComponent(scientificName)}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.image;
+  } catch (error) {
+    console.error('Plant photo fetch error:', error);
+    return 'https://via.placeholder.com/400x300?text=Фото+отсутствует';
+  }
+};
+
+// GigaChat заполняет ВСЕ данные
+export const enrichPlantData = async (scientificName: string): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/plants/enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scientificName })
+    });
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Enrich error:', error);
+    return null;
+  }
+};
+
 export const fetchPlants = async (filters: Filters, page: number = 1): Promise<FetchPlantsResult> => {
   try {
     const params = new URLSearchParams();
@@ -73,6 +109,7 @@ export const searchPlants = async (query: string): Promise<Plant[]> => {
   }
 };
 
+// ✅ ПОЛНАЯ ФУНКЦИЯ: Perenual (фото) + GigaChat (все данные) + База
 export const addRecognizedPlant = async (plantData: {
   scientificName: string;
   genus?: string;
@@ -80,21 +117,61 @@ export const addRecognizedPlant = async (plantData: {
   confidence?: number;
 }): Promise<any> => {
   try {
+    console.log('🚀 Auto-filling FULL plant data for:', plantData.scientificName);
+    
+    // 1. Фото из Perenual
+    const imageUrl = await fetchPlantImage(plantData.scientificName);
+    
+    // 2. GigaChat заполняет ВСЕ остальные поля
+    const enrichedData = await enrichPlantData(plantData.scientificName);
+    
+    // 3. Формируем ПОЛНОЕ растение
+    const fullPlantData = {
+      ...plantData,
+      image: imageUrl,
+      // ✅ Все данные из GigaChat (если есть)
+      ...(enrichedData?.data || {}),
+      // Fallback значения
+      color: enrichedData?.data?.color || 'green',
+      habitat: enrichedData?.data?.habitat || 'indoor',
+      size: enrichedData?.data?.size || 'medium',
+      category: enrichedData?.data?.category || 'foliage',
+      categoryName: enrichedData?.data?.categoryName || 'Декоративное',
+      description: enrichedData?.data?.description || 'Информация будет дополнена',
+      care: enrichedData?.data?.care || {
+        watering: 'умеренный',
+        light: 'рассеянный',
+        temperature: '18-25°C',
+        humidity: '50-70%'
+      },
+      features: enrichedData?.data?.features || [],
+      dangers: enrichedData?.data?.dangers || 'не ядовитое',
+      maintenance: enrichedData?.data?.maintenance || 'средний',
+    };
+
+    console.log('📋 Full plant data prepared:', {
+      name: fullPlantData.name || fullPlantData.scientificName,
+      image: fullPlantData.image,
+      color: fullPlantData.color,
+      habitat: fullPlantData.habitat
+    });
+
+    // 4. Отправляем ПОЛНОЕ растение на сервер
     const response = await fetch(`${API_BASE_URL}/plants/recognize`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(plantData),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullPlantData),
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     
-    return await response.json();
+    const result = await response.json();
+    console.log('✅ FULL Plant added to DB:', result.plant?.name || plantData.scientificName);
+    return result;
   } catch (error) {
-    console.error('Error adding recognized plant:', error);
+    console.error('❌ Error adding full plant:', error);
     throw error;
   }
 };
@@ -103,5 +180,7 @@ export default {
   fetchPlants,
   fetchPlantDetails,
   searchPlants,
-  addRecognizedPlant
+  addRecognizedPlant,
+  fetchPlantImage,
+  enrichPlantData
 };

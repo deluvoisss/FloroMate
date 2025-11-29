@@ -32,5 +32,10 @@
         "react-dom": "^18.3.1",
         "react-router-dom": "^6.20.1",
         "uuid": "^13.0.0"
+    },
+    "devDependencies": {
+        "crypto-browserify": "^3.12.1",
+        "os-browserify": "^0.3.0",
+        "path-browserify": "^1.0.1"
     }
 }

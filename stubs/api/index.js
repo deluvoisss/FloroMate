@@ -24,6 +24,7 @@ const PROXY_SERVER = process.env.PROXY_SERVER;
 const GIGACHAT_AUTH_KEY = process.env.GIGACHAT_AUTH_KEY;
 const GIGACHAT_SCOPE = 'GIGACHAT_API_PERS';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/floromate_db';
+const PLANT_ID_API_KEY = process.env.PLANT_ID_API_KEY;
 
 // PostgreSQL Pool
 const pool = new Pool({
@@ -51,11 +52,11 @@ if (!GIGACHAT_AUTH_KEY) {
 console.log('✅ API_KEY загружен');
 console.log('✅ GIGACHAT_AUTH_KEY загружен');
 console.log('✅ DATABASE_URL:', DATABASE_URL);
-
 if (PROXY_SERVER) {
   console.log('🔌 Proxy сервер:', PROXY_SERVER);
 }
 
+// Безопасные заголовки
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -80,7 +81,7 @@ app.use(cors({
 
 app.use(express.json());
 
-// Multer конфигурация для растений
+// Multer конфигурация
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
@@ -93,9 +94,8 @@ const httpsAgent = new https.Agent({
 });
 
 // ========================
-// DATABASE HELPER FUNCTIONS
+// DATABASE HELPER
 // ========================
-
 function formatPlantForFrontend(row) {
   return {
     id: row.id,
@@ -128,11 +128,11 @@ function formatPlantForFrontend(row) {
 // PLANT DATABASE ROUTES
 // ========================
 
-// GET /api/plants - Получение растений с фильтрами и пагинацией
+// GET /api/plants
 app.get('/api/plants', async (req, res) => {
   try {
     const { colors, habitats, sizes, page = 1, limit = 12 } = req.query;
-    
+
     let query = 'SELECT * FROM plants WHERE 1=1';
     const params = [];
     let paramIndex = 1;
@@ -160,14 +160,14 @@ app.get('/api/plants', async (req, res) => {
 
     const countQuery = query.replace('SELECT *', 'SELECT COUNT(*)');
     const countResult = await pool.query(countQuery, params);
-    const totalCount = parseInt(countResult.rows[0].count);
+    const totalCount = parseInt(countResult.rows[0].count, 10);
 
     const offset = (Number(page) - 1) * Number(limit);
     query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     params.push(Number(limit), offset);
 
     const result = await pool.query(query, params);
-    
+
     res.json({
       plants: result.rows.map(formatPlantForFrontend),
       totalPages: Math.ceil(totalCount / Number(limit)),
@@ -180,21 +180,20 @@ app.get('/api/plants', async (req, res) => {
   }
 });
 
-// GET /api/plants/search - Поиск растений
+// GET /api/plants/search
 app.get('/api/plants/search', async (req, res) => {
   try {
     const { query } = req.query;
-    
     if (!query || typeof query !== 'string') {
       return res.status(400).json({ error: 'Query parameter is required' });
     }
 
     const searchQuery = `
-      SELECT * FROM plants 
-      WHERE LOWER(name) LIKE LOWER($1) 
+      SELECT * FROM plants
+      WHERE LOWER(name) LIKE LOWER($1)
          OR LOWER(scientific_name) LIKE LOWER($1)
-      ORDER BY 
-        CASE 
+      ORDER BY
+        CASE
           WHEN LOWER(name) = LOWER($2) THEN 1
           WHEN LOWER(scientific_name) = LOWER($2) THEN 2
           ELSE 3
@@ -202,10 +201,10 @@ app.get('/api/plants/search', async (req, res) => {
         name
       LIMIT 50
     `;
-    
+
     const searchPattern = `%${query}%`;
     const result = await pool.query(searchQuery, [searchPattern, query]);
-    
+
     res.json(result.rows.map(formatPlantForFrontend));
   } catch (error) {
     console.error('Error searching plants:', error);
@@ -213,96 +212,108 @@ app.get('/api/plants/search', async (req, res) => {
   }
 });
 
-// GET /api/plants/:id - Получение деталей растения
-app.get('/api/plants/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await pool.query('SELECT * FROM plants WHERE id = $1', [id]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Plant not found' });
-    }
-    
-    res.json(formatPlantForFrontend(result.rows[0]));
-  } catch (error) {
-    console.error('Error fetching plant:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// POST /api/plants/recognize - Добавление распознанного растения
+// ========================
+// PLANT RECOGNIZE (ПОЛНОЕ СОХРАНЕНИЕ)
+// ========================
 app.post('/api/plants/recognize', async (req, res) => {
   try {
-    const { scientificName, genus, family, confidence } = req.body;
-    
+    const {
+      scientificName, name, image, color, habitat, size, category,
+      categoryName, description, watering, light, temperature,
+      humidity, features, dangers, maintenance, genus, family, confidence
+    } = req.body;
+
     if (!scientificName) {
-      return res.status(400).json({ error: 'Scientific name is required' });
+      return res.status(400).json({ error: 'Scientific name required' });
     }
 
-    // Проверка существования растения
-    const existingPlant = await pool.query(
+    // Проверяем существование
+    const existing = await pool.query(
       'SELECT * FROM plants WHERE scientific_name = $1',
       [scientificName]
     );
 
-    if (existingPlant.rows.length > 0) {
-      console.log(`ℹ️ Растение уже существует: ${scientificName}`);
-      return res.json({ 
-        message: 'Plant already exists', 
-        plant: formatPlantForFrontend(existingPlant.rows[0]),
+    if (existing.rows.length > 0) {
+      return res.json({
+        message: 'Plant already exists',
+        plant: formatPlantForFrontend(existing.rows[0]),
         isNew: false
       });
     }
 
-    // Добавление нового распознанного растения БЕЗ изображения
     const query = `
       INSERT INTO plants (
-        name, scientific_name, genus, family, confidence, is_recognized
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        name, scientific_name, image, color, habitat, size, category,
+        category_name, description, watering, light, temperature,
+        humidity, features, dangers, maintenance, genus, family, confidence,
+        is_recognized
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,
+        $8,$9,$10,$11,$12,
+        $13,$14,$15,$16,$17,$18,$19,
+        true
+      )
       RETURNING *
     `;
-    
+
     const values = [
-      scientificName, // Используем научное название как имя
+      name || scientificName,
       scientificName,
-      genus || null,
-      family || null,
-      confidence || null,
-      true // Помечаем как распознанное
+      image,
+      color,
+      habitat,
+      size,
+      category,
+      categoryName,
+      description,
+      watering,
+      light,
+      temperature,
+      humidity,
+      features && Array.isArray(features) ? JSON.stringify(features) : null, // ✅
+      dangers,
+      maintenance,
+      genus,
+      family,
+      confidence || 0.95
     ];
     
+
     const result = await pool.query(query, values);
-    console.log(`✅ Новое растение добавлено: ${scientificName}`);
-    
-    res.status(201).json({ 
-      message: 'Plant added successfully', 
+
+    console.log(`✅ FULL Plant added: ${scientificName}`);
+
+    res.status(201).json({
+      message: 'Plant fully added with GigaChat data',
       plant: formatPlantForFrontend(result.rows[0]),
       isNew: true
     });
   } catch (error) {
-    console.error('Error adding recognized plant:', error);
+    console.error('Error adding full plant:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ========================
-// PLANT RECOGNITION ROUTES
+// PLANT RECOGNITION (PlantNet)
 // ========================
-
 async function identifyPlant(images) {
   const form = new FormData();
   try {
     images.forEach((img, idx) => {
       let ext = mime.extension(img.mimetype) || 'jpg';
       let normalizedExt = ext === 'jpeg' ? 'jpg' : ext;
+
       form.append('images', img.buffer, {
         filename: `plant${idx}.${normalizedExt}`,
         contentType: img.mimetype
       });
+
       form.append('organs', img.organ);
     });
 
     console.log('🚀 Отправляем запрос к PlantNet API...');
+
     const axiosConfig = {
       headers: form.getHeaders(),
       maxBodyLength: Infinity,
@@ -362,6 +373,7 @@ app.post('/api/identify', upload.fields([
     const data = await identifyPlant(images);
     res.json(data);
   } catch (error) {
+    console.error('❌ Ошибка определения растения:', error.message);
     res.status(500).json({
       error: error.message,
       timestamp: new Date().toISOString()
@@ -372,7 +384,6 @@ app.post('/api/identify', upload.fields([
 // ========================
 // GIGACHAT ROUTES
 // ========================
-
 let cachedToken = null;
 let tokenExpiry = null;
 
@@ -399,7 +410,7 @@ async function getAccessToken() {
     );
 
     cachedToken = response.data.access_token;
-    tokenExpiry = Date.now() + (29 * 60 * 1000);
+    tokenExpiry = Date.now() + 29 * 60 * 1000;
     console.log('✅ Токен получен успешно');
     return cachedToken;
   } catch (error) {
@@ -408,6 +419,7 @@ async function getAccessToken() {
   }
 }
 
+// Чат с Гигачатом (у тебя уже работал)
 app.post('/api/chat', async (req, res) => {
   try {
     console.log('💬 Получен запрос на чат');
@@ -454,10 +466,95 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// Обогащение карточки растения через GigaChat
+app.post('/api/plants/enrich', async (req, res) => {
+  try {
+    const { scientificName } = req.body;
+    if (!scientificName) {
+      return res.status(400).json({ error: 'scientificName required' });
+    }
+
+    console.log(`🧠 GigaChat enrich: ${scientificName}`);
+
+    const accessToken = await getAccessToken();
+
+    const systemMessage = {
+      role: 'system',
+      content: 'Ты ботаник-эксперт. Отвечай ТОЛЬКО в виде валидного JSON без лишнего текста.'
+    };
+
+    const userPrompt = `
+Для растения "${scientificName}" верни ТОЛЬКО JSON в формате:
+
+{
+  "name": "Русское название",
+  "color": "green|purple|red|yellow|white",
+  "habitat": "indoor|garden|tropical|desert",
+  "size": "small|medium|large",
+  "category": "foliage|flowering",
+  "categoryName": "Название категории",
+  "description": "Короткое описание (2-3 предложения)",
+  "care": {
+    "watering": "1-2 раза в неделю",
+    "light": "яркий рассеянный",
+    "temperature": "18-27°C",
+    "humidity": "60-80%"
+  },
+  "features": ["черта1", "черта2"],
+  "dangers": "не ядовитое",
+  "maintenance": "низкий|средний|высокий"
+}
+`;
+
+    const response = await axios.post(
+      'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
+      {
+        model: 'GigaChat',
+        messages: [systemMessage, { role: 'user', content: userPrompt }],
+        temperature: 0.1,
+        max_tokens: 1024
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        httpsAgent
+      }
+    );
+
+    let gigaChatData = null;
+    try {
+      gigaChatData = JSON.parse(response.data.choices[0].message.content);
+    } catch (e) {
+      console.error('❌ JSON parse error GigaChat:', e.message);
+      console.error('RAW content:', response.data.choices[0].message.content);
+      return res.status(500).json({
+        error: 'Bad JSON from GigaChat',
+        raw: response.data.choices[0].message.content
+      });
+    }
+
+    console.log(`✅ GigaChat filled data for ${scientificName}`);
+
+    res.json({
+      scientificName,
+      enriched: true,
+      data: gigaChatData
+    });
+  } catch (error) {
+    console.error('❌ GigaChat enrich error:', error.response?.status, error.message);
+    res.status(500).json({
+      error: 'GigaChat enrichment failed',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
 // ========================
 // HEALTH CHECK
 // ========================
-
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -469,15 +566,121 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ========================
+// PLANT.ID HEALTH ASSESSMENT (DISEASE DETECTION)
+// ========================
+
+if (!PLANT_ID_API_KEY) {
+  console.warn('⚠️ PLANT_ID_API_KEY не найден в .env');
+} else {
+  console.log('✅ PLANT_ID_API_KEY загружен');
+}
+
+app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
+  try {
+    console.log('🦠 Получен запрос на определение болезни растения');
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'Загрузите изображение' });
+    }
+
+    if (!PLANT_ID_API_KEY) {
+      return res.status(500).json({ error: 'PLANT_ID_API_KEY не настроен на сервере' });
+    }
+
+    // Конвертируем изображение в base64
+    const base64Image = req.file.buffer.toString('base64');
+
+    console.log('🚀 Отправляем запрос к Plant.id Health Assessment API...');
+
+    const requestBody = {
+      images: [`data:image/jpeg;base64,${base64Image}`],
+      modifiers: ['health_all'],
+      disease_details: ['description', 'treatment', 'classification', 'common_names', 'url']
+    };
+
+    const axiosConfig = {
+      headers: {
+        'Api-Key': PLANT_ID_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      timeout: 60000
+    };
+
+    if (PROXY_SERVER) {
+      axiosConfig.httpAgent = new HttpProxyAgent(PROXY_SERVER);
+      axiosConfig.httpsAgent = new HttpsProxyAgent(PROXY_SERVER);
+      console.log('🔌 Используем прокси для Plant.id');
+    }
+
+    const response = await axios.post(
+      'https://api.plant.id/v2/health_assessment',
+      requestBody,
+      axiosConfig
+    );
+
+    const data = response.data;
+    
+    console.log('✅ Результат получен от Plant.id');
+    console.log('Полный ответ:', JSON.stringify(data, null, 2));
+
+    // Проверяем различные форматы ответа
+    const isHealthy = data.is_healthy?.binary ?? data.is_healthy ?? false;
+    const isHealthyProb = data.is_healthy?.probability ?? data.is_healthy_probability ?? 0;
+    const diseaseSuggestions = data.health_assessment?.diseases ?? data.disease?.suggestions ?? [];
+
+    console.log('Здоровое растение:', isHealthy);
+    console.log('Найдено болезней:', diseaseSuggestions.length);
+
+    // Форматируем ответ
+    const formattedResponse = {
+      is_healthy: isHealthy,
+      is_healthy_probability: isHealthyProb,
+      diseases: diseaseSuggestions.map(disease => ({
+        name: disease.name ?? disease.disease_name ?? 'Неизвестная болезнь',
+        probability: disease.probability ?? disease.confidence ?? 0,
+        scientific_name: disease.details?.scientific_name ?? disease.scientific_name,
+        description: disease.details?.description ?? disease.description,
+        treatment: disease.details?.treatment ?? disease.treatment,
+        common_names: disease.details?.common_names ?? disease.common_names ?? [],
+        url: disease.details?.url ?? disease.url,
+        classification: disease.details?.classification ?? disease.classification
+      })),
+      best_match: diseaseSuggestions.length > 0 ? {
+        disease_name: diseaseSuggestions[0].name ?? diseaseSuggestions[0].disease_name ?? 'Неизвестная болезнь',
+        confidence: diseaseSuggestions[0].probability ?? diseaseSuggestions[0].confidence ?? 0,
+        scientific_name: diseaseSuggestions[0].details?.scientific_name ?? diseaseSuggestions[0].scientific_name,
+        description: diseaseSuggestions[0].details?.description ?? diseaseSuggestions[0].description,
+        treatment: diseaseSuggestions[0].details?.treatment ?? diseaseSuggestions[0].treatment,
+        severity: diseaseSuggestions[0].details?.classification?.includes('pest') ? 'Вредитель' : 
+                 diseaseSuggestions[0].details?.classification?.includes('disease') ? 'Болезнь' : 'Проблема'
+      } : null
+    };
+
+    res.json(formattedResponse);
+
+  } catch (error) {
+    console.error('❌ Ошибка Plant.id:', error.response?.status, error.message);
+    console.error('Детали ошибки:', error.response?.data);
+    res.status(error.response?.status || 500).json({
+      error: error.message,
+      details: error.response?.data,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+
+// Запуск сервера
 app.listen(PORT, () => {
-  console.log(`\n✅ FloroMate сервер запущен на http://localhost:${PORT}`);
-  console.log(`🗄️  PostgreSQL: ${DATABASE_URL}`);
-  console.log(`\n📌 Доступные маршруты:`);
-  console.log(`  POST /api/identify - определение растения`);
-  console.log(`  POST /api/chat - AI ассистент`);
-  console.log(`  GET  /api/plants - список растений из БД`);
-  console.log(`  GET  /api/plants/search?query=... - поиск растений`);
-  console.log(`  GET  /api/plants/:id - детали растения`);
-  console.log(`  POST /api/plants/recognize - добавить распознанное растение`);
-  console.log(`  GET  /api/health - проверка статуса\n`);
+  console.log(`🌿 FloroMate API запущен: http://localhost:${PORT}`);
+  console.log('📦 PostgreSQL:', DATABASE_URL);
+  console.log('POST /api/identify - распознавание растений');
+  console.log('POST /api/chat - AI чат');
+  console.log('GET /api/plants - список растений');
+  console.log('GET /api/plants/search?query=... - поиск растений');
+  console.log('POST /api/plants/recognize - сохранить распознанное растение');
+  console.log('POST /api/plants/enrich - обогащение данных растения (GigaChat)');
+  console.log('GET /api/plants/photo - фото растения (Perenual)');
+  console.log('GET /api/health - проверка состояния API');
 });
