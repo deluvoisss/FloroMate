@@ -8,7 +8,6 @@ interface DiseaseResult {
   description?: string;
   treatment?: string;
   common_names?: string[];
-  url?: string;
 }
 
 interface BestMatch {
@@ -29,25 +28,23 @@ interface ApiResponse {
 }
 
 const DiseaseDetection: React.FC = () => {
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [bestMatch, setBestMatch] = useState<BestMatch | null>(null);
-  const [allResults, setAllResults] = useState<DiseaseResult[]>([]);
-  const [isHealthy, setIsHealthy] = useState<boolean | null>(null);
+  const [bestMatch, setBestMatch] = useState(null);
+  const [allResults, setAllResults] = useState([]);
+  const [isHealthy, setIsHealthy] = useState(null);
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setImageFile(file);
-      
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
-      
       setStatus(null);
       setBestMatch(null);
       setAllResults([]);
@@ -57,7 +54,6 @@ const DiseaseDetection: React.FC = () => {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
     if (!imageFile) {
       setStatus({ message: '❌ Пожалуйста, выберите изображение', type: 'error' });
       return;
@@ -70,14 +66,10 @@ const DiseaseDetection: React.FC = () => {
       const formData = new FormData();
       formData.append('image', imageFile);
 
-      console.log('Отправка запроса на анализ болезней...');
-
       const response = await fetch('http://localhost:3001/api/disease-detect', {
         method: 'POST',
-        body: formData
+        body: formData,
       });
-
-      console.log('Ответ получен, статус:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -85,32 +77,29 @@ const DiseaseDetection: React.FC = () => {
       }
 
       const data: ApiResponse = await response.json();
-      console.log('Данные от API:', data);
-
       if (data.error) {
         throw new Error(data.error);
       }
 
       setIsHealthy(data.is_healthy);
-
       if (data.is_healthy) {
-        setStatus({ 
-          message: `✅ Растение здоровое! (Уверенность: ${(data.is_healthy_probability * 100).toFixed(1)}%)`, 
-          type: 'success' 
+        setStatus({
+          message: `✅ Растение здоровое! (Уверенность: ${(data.is_healthy_probability * 100).toFixed(1)}%)`,
+          type: 'success',
         });
         setBestMatch(null);
         setAllResults([]);
       } else {
         if (data.best_match) {
           setBestMatch(data.best_match);
-          setStatus({ 
-            message: '⚠️ Обнаружены проблемы со здоровьем растения', 
-            type: 'error' 
+          setStatus({
+            message: '⚠️ Обнаружены проблемы со здоровьем растения',
+            type: 'error',
           });
         } else if (data.diseases.length === 0) {
           setStatus({
-            message: '🤔 Не удалось определить конкретное заболевание. Попробуйте сделать более качественное фото.',
-            type: 'info'
+            message: '🤔 Не удалось определить болезнь. Попробуйте загрузить более качественное фото.',
+            type: 'info',
           });
         }
 
@@ -118,12 +107,10 @@ const DiseaseDetection: React.FC = () => {
           setAllResults(data.diseases);
         }
       }
-
     } catch (error) {
-      console.error('Ошибка при анализе:', error);
-      setStatus({ 
-        message: `❌ Ошибка при анализе: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`, 
-        type: 'error' 
+      setStatus({
+        message: `❌ Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
+        type: 'error',
       });
     } finally {
       setLoading(false);
@@ -141,153 +128,188 @@ const DiseaseDetection: React.FC = () => {
 
   return (
     <div className="disease-detection-page">
-      <div className="detection-container">
-        <div className="detection-header">
-          <h1>🦠 Определение болезней растений</h1>
-          <p className="subtitle">Загрузите фото растения для диагностики заболеваний</p>
-        </div>
+      {/* Decorative Plants */}
+      <div className="decorative-plants">
+        <div className="deco-plant deco-1">🌿</div>
+        <div className="deco-plant deco-2">🍃</div>
+        <div className="deco-plant deco-3">🌱</div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="detection-form">
-          <div className="form-group">
-            <label htmlFor="image" className="form-label">
-              📷 Фото растения
-            </label>
-            <input
-              id="image"
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              disabled={loading}
-              className="file-input"
-            />
-            {imageFile && (
-              <div className="file-preview">
-                <span className="preview-icon">✓</span>
-                <span className="preview-text">{imageFile.name}</span>
-              </div>
-            )}
-            {previewUrl && (
-              <div className="image-preview">
-                <img src={previewUrl} alt="Preview" />
-              </div>
-            )}
+      <div className="detection-wrapper">
+        {/* Header */}
+        <div className="detection-container">
+          <div className="detection-header">
+            <h1 className="page-title">🦠 Диагностика болезней растений</h1>
+            <p className="page-subtitle">
+              Загрузите фото больного растения — мы определим проблему и предложим решение
+            </p>
           </div>
 
-          <div className="button-group">
-            <button
-              type="submit"
-              disabled={loading || !imageFile}
-              className="btn-primary"
-            >
-              {loading ? '⏳ Анализируем...' : '🔬 Проверить здоровье'}
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              disabled={loading}
-              className="btn-secondary"
-            >
-              🔄 Сбросить
-            </button>
-          </div>
-        </form>
+          {/* Form Section */}
+          <form className="detection-form" onSubmit={handleSubmit}>
+            <div className="upload-section">
+              <label className="upload-label">
+                <span className="label-icon">📸</span>
+                Фото растения
+              </label>
 
-        {status && (
-          <div className={`status ${status.type}`}>
-            {status.message}
-          </div>
-        )}
-
-        {isHealthy === true && (
-          <div className="healthy-plant">
-            <div className="healthy-icon">🌿</div>
-            <h3>Растение выглядит здоровым!</h3>
-            <p>Признаков заболеваний не обнаружено. Продолжайте ухаживать за вашим растением.</p>
-          </div>
-        )}
-
-        {bestMatch && (
-          <div className="best-match">
-            <h2 className="result-title">⚠️ Основная проблема</h2>
-            <div className="disease-item featured">
-              <div className="disease-name">{bestMatch.disease_name}</div>
-              
-              {bestMatch.scientific_name && (
-                <p className="disease-info">
-                  <strong>Научное название:</strong> <em>{bestMatch.scientific_name}</em>
-                </p>
-              )}
-              
-              {bestMatch.severity && (
-                <p className="disease-info">
-                  <strong>Тип:</strong> {bestMatch.severity}
-                </p>
-              )}
-              
-              {bestMatch.description && (
-                <p className="disease-info">
-                  <strong>Описание:</strong> {bestMatch.description}
-                </p>
-              )}
-              
-              {bestMatch.treatment && (
-                <div className="treatment-box">
-                  <strong>💊 Лечение:</strong>
-                  <p>{bestMatch.treatment}</p>
-                </div>
-              )}
-
-              <div className="confidence-bar-container">
-                <div 
-                  className="confidence-bar" 
-                  style={{ width: `${bestMatch.confidence * 100}%` }}
+              <div className="file-input-wrapper">
+                <input
+                  type="file"
+                  className="file-input"
+                  onChange={handleFileChange}
+                  disabled={loading}
+                  accept="image/*"
                 />
-                <div className="confidence-text">
-                  {(bestMatch.confidence * 100).toFixed(1)}%
-                </div>
+
+                {!previewUrl ? (
+                  <div className="file-input-placeholder" onClick={() => document.querySelector('.file-input')?.click()}>
+                    <span className="placeholder-icon">📁</span>
+                    <span className="placeholder-text">Выбрать фото</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="image-preview">
+                      <img src={previewUrl} alt="Preview" />
+                      <div className="preview-badge">✓</div>
+                    </div>
+                  </>
+                )}
               </div>
+
+              {imageFile && <p className="file-name">{imageFile.name}</p>}
             </div>
-          </div>
-        )}
 
-        {allResults.length > 1 && (
-          <div className="all-results">
-            <h2 className="result-title">📋 Другие возможные проблемы</h2>
-            <div className="results-list">
-              {allResults.slice(1).map((disease, index) => (
-                <div key={index} className="disease-item">
-                  <div className="disease-name">{disease.name}</div>
-                  
-                  {disease.scientific_name && (
-                    <p className="disease-info">
-                      <em>{disease.scientific_name}</em>
-                    </p>
-                  )}
+            {/* Buttons */}
+            <div className="button-group">
+              <button
+                className="btn-analyze"
+                type="submit"
+                disabled={loading || !imageFile}
+              >
+                {loading ? '⏳ Анализируем...' : '🔬 Проверить здоровье'}
+              </button>
+              <button
+                className="btn-reset"
+                type="button"
+                onClick={handleReset}
+                disabled={loading}
+              >
+                🔄 Сбросить
+              </button>
+            </div>
+          </form>
 
-                  {disease.common_names && disease.common_names.length > 0 && (
-                    <p className="disease-info">
-                      <strong>Также известно как:</strong> {disease.common_names.join(', ')}
-                    </p>
-                  )}
+          {/* Status Message */}
+          {status && (
+            <div className={`status-message status-${status.type}`}>
+              {status.message}
+            </div>
+          )}
 
-                  {disease.description && (
-                    <p className="disease-info">{disease.description}</p>
-                  )}
+          {/* Healthy Plant Message */}
+          {isHealthy === true && (
+            <div className="healthy-alert">
+              <div className="healthy-icon">🌱</div>
+              <h3>Растение выглядит здоровым!</h3>
+              <p>Признаков заболеваний не обнаружено. Продолжайте ухаживать за вашим растением.</p>
+            </div>
+          )}
 
+          {/* Best Match Result */}
+          {bestMatch && (
+            <div className="best-match-section">
+              <h2 className="result-title">⚠️ Обнаруженная проблема</h2>
+              <div className="best-match-card">
+                <h3 className="match-name">{bestMatch.disease_name}</h3>
+
+                {bestMatch.scientific_name && (
+                  <div className="match-info">
+                    <span className="info-label">Научное название:</span>
+                    <span className="info-value scientific">{bestMatch.scientific_name}</span>
+                  </div>
+                )}
+
+                {bestMatch.severity && (
+                  <div className="match-info">
+                    <span className="info-label">Тип проблемы:</span>
+                    <span className="info-value">{bestMatch.severity}</span>
+                  </div>
+                )}
+
+                {bestMatch.description && (
+                  <div className="match-info">
+                    <span className="info-label">Описание:</span>
+                    <span className="info-value">{bestMatch.description}</span>
+                  </div>
+                )}
+
+                {bestMatch.treatment && (
+                  <div className="treatment-box">
+                    <span className="treatment-icon">💊</span>
+                    <div className="treatment-content">
+                      <span className="treatment-label">Рекомендации по лечению:</span>
+                      <p>{bestMatch.treatment}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="confidence-section">
+                  <span className="confidence-label">Уверенность диагностики:</span>
                   <div className="confidence-bar-container">
-                    <div 
-                      className="confidence-bar" 
-                      style={{ width: `${disease.probability * 100}%` }}
-                    />
-                    <div className="confidence-text">
-                      {(disease.probability * 100).toFixed(1)}%
+                    <div
+                      className="confidence-bar"
+                      style={{ width: `${bestMatch.confidence * 100}%` }}
+                    >
+                      <span className="confidence-text">
+                        {(bestMatch.confidence * 100).toFixed(1)}%
+                      </span>
                     </div>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Alternative Results */}
+          {allResults.length > 1 && (
+            <div className="other-results-section">
+              <h2 className="result-title">📋 Другие возможные проблемы</h2>
+              <div className="disease-list">
+                {allResults.slice(1).map((disease, idx) => (
+                  <div key={idx} className="disease-card">
+                    <div className="disease-info">
+                      <span className="disease-rank">#{idx + 2}</span>
+                      <div className="disease-content">
+                        <div className="disease-name-small">{disease.name}</div>
+                        {disease.scientific_name && (
+                          <div className="disease-scientific">{disease.scientific_name}</div>
+                        )}
+                        {disease.common_names && disease.common_names.length > 0 && (
+                          <div className="disease-common">
+                            Также известно как: {disease.common_names.join(', ')}
+                          </div>
+                        )}
+                        {disease.description && (
+                          <div className="disease-desc">{disease.description}</div>
+                        )}
+                      </div>
+                      <div className="disease-confidence">
+                        {(disease.probability * 100).toFixed(1)}%
+                      </div>
+                    </div>
+                    <div className="confidence-mini-bar">
+                      <div
+                        className="confidence-mini-fill"
+                        style={{ width: `${disease.probability * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

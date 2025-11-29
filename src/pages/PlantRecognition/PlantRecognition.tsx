@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, ChangeEvent, FormEvent, useRef } from 'react';
 import './PlantRecognition.css';
-import plantApiService from '../Encyclopedia/plantApi';
 
 interface PlantResult {
   species?: {
@@ -8,10 +7,10 @@ interface PlantResult {
     scientificNameWithoutAuthor?: string;
   };
   genus?: {
-    scientificNameWithoutAuthor: string;
+    scientificNameWithoutAuthor?: string;
   };
   family?: {
-    scientificNameWithoutAuthor: string;
+    scientificNameWithoutAuthor?: string;
   };
   score: number;
 }
@@ -25,124 +24,96 @@ interface RecognitionResponse {
 const PlantRecognition: React.FC = () => {
   const [flowerImage, setFlowerImage] = useState<File | null>(null);
   const [leafImage, setLeafImage] = useState<File | null>(null);
+  const [flowerPreview, setFlowerPreview] = useState<string | null>(null);
+  const [leafPreview, setLeafPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [status, setStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [results, setResults] = useState<PlantResult[]>([]);
   const [bestMatch, setBestMatch] = useState<PlantResult | null>(null);
 
-  const handleFlowerImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setFlowerImage(e.target.files[0]);
-      console.log('📸 Выбрано фото цветка:', e.target.files[0].name);
-    }
-  };
+  // Создаем ref для input элементов
+  const flowerInputRef = useRef<HTMLInputElement>(null);
+  const leafInputRef = useRef<HTMLInputElement>(null);
 
-  const handleLeafImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setLeafImage(e.target.files[0]);
-      console.log('🍃 Выбрано фото листа:', e.target.files[0].name);
+  const handleImageChange = (
+    e: ChangeEvent<HTMLInputElement>,
+    type: 'flower' | 'leaf'
+  ) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+
+      reader.onloadend = () => {
+        const preview = reader.result as string;
+        if (type === 'flower') {
+          setFlowerImage(file);
+          setFlowerPreview(preview);
+        } else {
+          setLeafImage(file);
+          setLeafPreview(preview);
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const getPlantName = (plant: PlantResult): string => {
-    if (plant.species?.commonNames && plant.species.commonNames.length > 0)
+    if (plant.species?.commonNames && plant.species.commonNames.length > 0) {
       return plant.species.commonNames[0];
-    if (plant.species?.scientificNameWithoutAuthor)
+    }
+    if (plant.species?.scientificNameWithoutAuthor) {
       return plant.species.scientificNameWithoutAuthor;
-    if (plant.genus?.scientificNameWithoutAuthor)
-      return `Род: ${plant.genus.scientificNameWithoutAuthor}`;
-    if (plant.family?.scientificNameWithoutAuthor)
-      return `Семейство: ${plant.family.scientificNameWithoutAuthor}`;
+    }
+    if (plant.genus?.scientificNameWithoutAuthor) {
+      return plant.genus.scientificNameWithoutAuthor;
+    }
     return 'Неизвестное растение';
   };
 
-  const handleIdentify = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!flowerImage && !leafImage) {
-      setStatus({ type: 'error', message: '❌ Загрузите хотя бы одно изображение' });
+      setStatus({ message: '❌ Пожалуйста, загрузите хотя бы одно изображение', type: 'error' });
       return;
     }
 
     setLoading(true);
-    setStatus({ type: 'info', message: '⏳ Анализ изображений...' });
-    console.log('🚀 Отправка запроса на сервер...');
+    setStatus({ message: '🔍 Анализируем растение...', type: 'info' });
 
     try {
       const formData = new FormData();
+      if (flowerImage) formData.append('flower', flowerImage);
+      if (leafImage) formData.append('leaf', leafImage);
 
-      if (flowerImage) {
-        formData.append('flower', flowerImage);
-        console.log('➕ Добавлено фото цветка');
-      }
-
-      if (leafImage) {
-        formData.append('leaf', leafImage);
-        console.log('➕ Добавлено фото листа');
-      }
-
-      // ОБНОВЛЁННЫЙ АДРЕС - теперь один сервер на порту 3001
       const response = await fetch('http://localhost:3001/api/identify', {
         method: 'POST',
         body: formData,
       });
 
-      console.log('📥 Ответ получен, статус:', response.status);
-      const data: RecognitionResponse = await response.json();
-      console.log('📊 Данные ответа:', data);
+      if (!response.ok) {
+        throw new Error(`Ошибка: ${response.status}`);
+      }
 
-      if (!response.ok || data.error) {
-        const errorMsg = `❌ ${data.error || 'Ошибка при определении растения'}`;
-        const suggestion = data.suggestion ? `\n\n💡 ${data.suggestion}` : '';
-        setStatus({
-          type: 'error',
-          message: errorMsg + suggestion
-        });
-        setResults([]);
-        setBestMatch(null);
-      } else if (data.results && data.results.length > 0) {
-        const sortedResults = [...data.results].sort((a, b) => b.score - a.score);
-        setStatus({
-          type: 'success',
-          message: `✅ Найдено ${data.results.length} совпадений!`
-        });
-        setResults(sortedResults);
-        setBestMatch(sortedResults[0]);
-      } else {
-        setStatus({ type: 'info', message: 'ℹ️ Растение не найдено в базе' });
-        setResults([]);
-        setBestMatch(null);
+      const data: RecognitionResponse = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
       }
+
       if (data.results && data.results.length > 0) {
-        const bestMatch = data.results[0];
-        
-        try {
-          const result = await plantApiService.addRecognizedPlant({
-            scientificName: bestMatch.species.scientificNameWithoutAuthor,
-            genus: bestMatch.genus?.scientificNameWithoutAuthor,
-            family: bestMatch.family?.scientificNameWithoutAuthor,
-            confidence: bestMatch.score * 100
-          });
-          
-          if (result.isNew) {
-            console.log('✅ Новое растение добавлено в базу данных');
-          } else {
-            console.log('ℹ️ Растение уже существует в базе данных');
-          }
-        } catch (dbError) {
-          console.error('❌ Ошибка при добавлении в БД:', dbError);
-        }
+        const sorted = [...data.results].sort((a, b) => b.score - a.score);
+        setResults(sorted);
+        setBestMatch(sorted[0]);
+        setStatus({ message: '✅ Растение определено!', type: 'success' });
+      } else {
+        setStatus({ message: '🤔 Не удалось определить растение', type: 'info' });
       }
-    } 
-    catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
-      console.error('❌ Ошибка запроса:', error);
+    } catch (error) {
       setStatus({
+        message: `❌ Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
         type: 'error',
-        message: `❌ Ошибка подключения к серверу\n\n💡 Убедитесь, что:\n1. Сервер запущен на http://localhost:3001\n2. Используйте: node server/server.js\n\nОшибка: ${errorMessage}`
       });
-      setResults([]);
-      setBestMatch(null);
     } finally {
       setLoading(false);
     }
@@ -151,106 +122,219 @@ const PlantRecognition: React.FC = () => {
   const handleReset = () => {
     setFlowerImage(null);
     setLeafImage(null);
+    setFlowerPreview(null);
+    setLeafPreview(null);
+    setStatus(null);
     setResults([]);
     setBestMatch(null);
-    setStatus(null);
-    console.log('🔄 Сброс формы');
+    
+    // Очищаем input элементы
+    if (flowerInputRef.current) flowerInputRef.current.value = '';
+    if (leafInputRef.current) leafInputRef.current.value = '';
   };
 
   return (
-    <div className="plant-recognition-container">
-      <h2>🌿 Определение растений</h2>
-      <p>Загрузите фото цветка или листа для точного определения</p>
+    <div className="plant-recognition-page">
+      {/* Декоративные элементы */}
+      <div className="decorative-plants">
+        <div className="deco-plant deco-1">🌿</div>
+        <div className="deco-plant deco-2">🌾</div>
+        <div className="deco-plant deco-3">🍃</div>
+      </div>
 
-      <form onSubmit={handleIdentify} className="recognition-form">
-        <div className="image-upload-group">
-          <label htmlFor="flower-input" className="upload-label">
-            📸 Фото цветка
-          </label>
-          <input
-            id="flower-input"
-            type="file"
-            accept="image/*"
-            onChange={handleFlowerImageChange}
-            className="file-input"
-          />
-          {flowerImage && (
-            <div className="file-info">
-              ✓ {flowerImage.name}
+      <div className="recognition-wrapper">
+        <div className="recognition-container">
+          {/* Header */}
+          <div className="recognition-header">
+            <h1 className="page-title">📸 Распознавание растений</h1>
+            <p className="page-subtitle">
+              Загрузите фото цветка или листа — мы определим растение за секунду
+            </p>
+          </div>
+
+          {/* Form Section */}
+          <form className="recognition-form" onSubmit={handleSubmit}>
+            <div className="form-container">
+              {/* Flower Upload */}
+              <div className="upload-group">
+                <label className="upload-label">
+                  <span className="label-icon">🌸</span>
+                  Фото цветка
+                </label>
+                <div
+                  className="file-input-wrapper"
+                  onClick={() => flowerInputRef.current?.click()}
+                >
+                  <input
+                    ref={flowerInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageChange(e, 'flower')}
+                    disabled={loading}
+                    className="file-input"
+                  />
+                  {!flowerPreview ? (
+                    <div className="file-input-placeholder">
+                      <span className="placeholder-icon">📷</span>
+                      <span className="placeholder-text">Выбрать фото</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="image-preview">
+                        <img src={flowerPreview} alt="Flower preview" />
+                        <div className="preview-badge">✓</div>
+                      </div>
+                      {flowerImage && <div className="file-name">{flowerImage.name}</div>}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Leaf Upload */}
+              <div className="upload-group">
+                <label className="upload-label">
+                  <span className="label-icon">🍃</span>
+                  Фото листа
+                </label>
+                <div
+                  className="file-input-wrapper"
+                  onClick={() => leafInputRef.current?.click()}
+                >
+                  <input
+                    ref={leafInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageChange(e, 'leaf')}
+                    disabled={loading}
+                    className="file-input"
+                  />
+                  {!leafPreview ? (
+                    <div className="file-input-placeholder">
+                      <span className="placeholder-icon">📷</span>
+                      <span className="placeholder-text">Выбрать фото</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="image-preview">
+                        <img src={leafPreview} alt="Leaf preview" />
+                        <div className="preview-badge">✓</div>
+                      </div>
+                      {leafImage && <div className="file-name">{leafImage.name}</div>}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="button-group">
+              <button
+                type="submit"
+                className="btn-identify"
+                disabled={loading || (!flowerImage && !leafImage)}
+              >
+                {loading ? '⏳ Анализируем...' : '🔬 Определить растение'}
+              </button>
+              <button
+                type="button"
+                className="btn-reset"
+                onClick={handleReset}
+                disabled={loading}
+              >
+                🔄 Сбросить
+              </button>
+            </div>
+          </form>
+
+          {/* Status Message */}
+          {status && (
+            <div className={`status-message status-${status.type}`}>
+              {status.message}
             </div>
           )}
-        </div>
 
-        <div className="image-upload-group">
-          <label htmlFor="leaf-input" className="upload-label">
-            🍃 Фото листа
-          </label>
-          <input
-            id="leaf-input"
-            type="file"
-            accept="image/*"
-            onChange={handleLeafImageChange}
-            className="file-input"
-          />
-          {leafImage && (
-            <div className="file-info">
-              ✓ {leafImage.name}
-            </div>
-          )}
-        </div>
+          {/* Results */}
+          {bestMatch && (
+            <>
+              <div className="best-match-section">
+                <h2 className="result-title">🎯 Наиболее вероятный результат</h2>
+                <div className="best-match-card">
+                  <div className="match-name">{getPlantName(bestMatch)}</div>
 
-        <button type="submit" disabled={loading} className="identify-btn">
-          {loading ? '⏳ Анализ...' : '🔍 Определить растение'}
-        </button>
+                  {bestMatch.species?.scientificNameWithoutAuthor && (
+                    <div className="match-info">
+                      <span className="info-label">Научное название:</span>
+                      <span className="info-value scientific">
+                        {bestMatch.species.scientificNameWithoutAuthor}
+                      </span>
+                    </div>
+                  )}
 
-        <button type="button" onClick={handleReset} className="reset-btn">
-          🔄 Сбросить
-        </button>
-      </form>
+                  {bestMatch.genus?.scientificNameWithoutAuthor && (
+                    <div className="match-info">
+                      <span className="info-label">Род:</span>
+                      <span className="info-value">{bestMatch.genus.scientificNameWithoutAuthor}</span>
+                    </div>
+                  )}
 
-      {status && (
-        <div className={`status-message status-${status.type}`}>
-          {status.message}
-        </div>
-      )}
+                  {bestMatch.family?.scientificNameWithoutAuthor && (
+                    <div className="match-info">
+                      <span className="info-label">Семейство:</span>
+                      <span className="info-value">{bestMatch.family.scientificNameWithoutAuthor}</span>
+                    </div>
+                  )}
 
-      {bestMatch && (
-        <div className="best-match">
-          <h3>🏆 Лучший результат</h3>
-          <h4>{getPlantName(bestMatch)}</h4>
+                  <div className="confidence-section">
+                    <span className="confidence-label">Уверенность:</span>
+                    <div className="confidence-bar-container">
+                      <div
+                        className="confidence-bar"
+                        style={{ width: `${bestMatch.score * 100}%` }}
+                      >
+                        <span className="confidence-text">
+                          {(bestMatch.score * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-          {bestMatch.species?.scientificNameWithoutAuthor && (
-            <p>Научное название: <em>{bestMatch.species.scientificNameWithoutAuthor}</em></p>
-          )}
-
-          {bestMatch.genus?.scientificNameWithoutAuthor && (
-            <p>Род: <em>{bestMatch.genus.scientificNameWithoutAuthor}</em></p>
-          )}
-
-          {bestMatch.family?.scientificNameWithoutAuthor && (
-            <p>Семейство: <em>{bestMatch.family.scientificNameWithoutAuthor}</em></p>
-          )}
-
-          <p className="confidence">
-            Уверенность: <strong>{(bestMatch.score * 100).toFixed(1)}%</strong>
-          </p>
-        </div>
-      )}
-
-      {results.length > 1 && (
-        <div className="other-matches">
-          <h3>📋 Другие совпадения</h3>
-          {results.slice(1).map((plant, index) => (
-            <div key={index} className="match-item">
-              <p>{getPlantName(plant)}</p>
-              {plant.species?.scientificNameWithoutAuthor && (
-                <p className="scientific-name">{plant.species.scientificNameWithoutAuthor}</p>
+              {results.length > 1 && (
+                <div className="other-results-section">
+                  <h2 className="result-title">📋 Другие варианты</h2>
+                  <div className="results-list">
+                    {results.slice(1).map((plant, idx) => (
+                      <div key={idx} className="result-item">
+                        <span className="result-rank">#{idx + 2}</span>
+                        <div className="result-content">
+                          <div className="result-name">{getPlantName(plant)}</div>
+                          {plant.species?.scientificNameWithoutAuthor && (
+                            <div className="result-scientific">
+                              {plant.species.scientificNameWithoutAuthor}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="result-confidence">
+                            {(plant.score * 100).toFixed(1)}%
+                          </div>
+                          <div className="confidence-mini-bar">
+                            <div
+                              className="confidence-mini-fill"
+                              style={{ width: `${plant.score * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
-              <p className="score">Уверенность: {(plant.score * 100).toFixed(1)}%</p>
-            </div>
-          ))}
+            </>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };
