@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header/Header';
-import MainPage from './pages/MainPage';
+import MainPage from './pages/MainPage/MainPage';
 import LandscapeDesign from './pages/LandscapeDesign';
 import LandscapeConstructor from './pages/LandscapeConstructor';
 import Encyclopedia from './pages/Encyclopedia/Encyclopedia';
