@@ -72,43 +72,81 @@ const PlantRecognition: React.FC = () => {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     if (!flowerImage && !leafImage) {
       setStatus({ message: '❌ Пожалуйста, загрузите хотя бы одно изображение', type: 'error' });
       return;
     }
-
+  
     setLoading(true);
     setStatus({ message: '🔍 Анализируем растение...', type: 'info' });
-
+    
     try {
       const formData = new FormData();
       if (flowerImage) formData.append('flower', flowerImage);
       if (leafImage) formData.append('leaf', leafImage);
-
+  
+      // Шаг 1: Распознавание через PlantNet
       const response = await fetch('http://localhost:3001/api/identify', {
         method: 'POST',
         body: formData,
       });
-
+  
       if (!response.ok) {
         throw new Error(`Ошибка: ${response.status}`);
       }
-
+  
       const data: RecognitionResponse = await response.json();
-
+  
       if (data.error) {
         throw new Error(data.error);
       }
-
+  
       if (data.results && data.results.length > 0) {
         const sorted = [...data.results].sort((a, b) => b.score - a.score);
-        setResults(sorted);
-        setBestMatch(sorted[0]);
+        
+        // Шаг 2: Переводим ВСЕ результаты через Groq
+        setStatus({ message: '🤖 Переводим на русский...', type: 'info' });
+        
+        const translationPromises = sorted.map(async (result) => {
+          const scientificName = result.species?.scientificNameWithoutAuthor || 
+                                result.genus?.scientificNameWithoutAuthor || 
+                                'Unknown';
+          
+          try {
+            const enrichResponse = await fetch('http://localhost:3001/api/plants/enrich', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ scientificName })
+            });
+            
+            if (enrichResponse.ok) {
+              const enrichData = await enrichResponse.json();
+              
+              if (enrichData.data && enrichData.data.name) {
+                if (!result.species) result.species = {};
+                result.species.commonNames = [
+                  enrichData.data.name,
+                  enrichData.data.commonName
+                ].filter(Boolean);
+              }
+            }
+          } catch (enrichError) {
+            console.warn('Не удалось перевести:', scientificName);
+          }
+          
+          return result;
+        });
+        
+        // Ждем завершения всех переводов
+        const translatedResults = await Promise.all(translationPromises);
+        
+        setResults(translatedResults);
+        setBestMatch(translatedResults[0]);
         setStatus({ message: '✅ Растение определено!', type: 'success' });
       } else {
         setStatus({ message: '🤔 Не удалось определить растение', type: 'info' });
       }
+  
     } catch (error) {
       setStatus({
         message: `❌ Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
@@ -118,7 +156,8 @@ const PlantRecognition: React.FC = () => {
       setLoading(false);
     }
   };
-
+  
+  
   const handleReset = () => {
     setFlowerImage(null);
     setLeafImage(null);
@@ -228,13 +267,10 @@ const PlantRecognition: React.FC = () => {
 
             {/* Buttons */}
             <div className="button-group">
-              <button
-                type="submit"
-                className="btn-identify"
-                disabled={loading || (!flowerImage && !leafImage)}
-              >
-                {loading ? '⏳ Анализируем...' : '🔬 Определить растение'}
-              </button>
+            <button type="submit" className="btn-identify" disabled={loading || (!flowerImage && !leafImage)}>
+  {loading ? '⏳ Анализируем и переводим...' : '🔬 Определить растение'}
+</button>
+
               <button
                 type="button"
                 className="btn-reset"

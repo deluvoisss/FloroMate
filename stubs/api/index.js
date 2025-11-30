@@ -25,6 +25,14 @@ const GIGACHAT_AUTH_KEY = process.env.GIGACHAT_AUTH_KEY;
 const GIGACHAT_SCOPE = 'GIGACHAT_API_PERS';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/floromate_db';
 const PLANT_ID_API_KEY = process.env.PLANT_ID_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+// Проверка GROQ_API_KEY
+if (!GROQ_API_KEY) {
+  console.error('❌ Ошибка: GROQ_API_KEY не найден в .env');
+  process.exit(1);
+}
+console.log('✅ GROQ_API_KEY загружен');
 
 // PostgreSQL Pool
 const pool = new Pool({
@@ -419,6 +427,68 @@ async function getAccessToken() {
   }
 }
 
+// ========================
+// GROQ AI TRANSLATION
+// ========================
+async function translatePlantWithGroq(scientificName) {
+  try {
+    console.log(`🤖 Groq обрабатывает: ${scientificName}`);
+    
+    const prompt = `Ты ботаник. Для растения "${scientificName}" верни ТОЛЬКО JSON:
+{
+  "name": "Полное русское название растения (например: Тюльпан Геснера, Роза садовая)",
+  "commonName": "Народное название"
+}
+
+ВАЖНО: "name" должно быть ПОЛНЫМ названием с видом, не общим словом!`;
+
+    const axiosConfig = {
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    };
+
+    if (PROXY_SERVER) {
+      axiosConfig.httpAgent = new HttpProxyAgent(PROXY_SERVER);
+      axiosConfig.httpsAgent = new HttpsProxyAgent(PROXY_SERVER);
+      console.log('🔌 Используем прокси для Groq');
+    }
+
+    const response = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          {
+            role: 'system',
+            content: 'Ты ботаник-эксперт. Отвечай ТОЛЬКО валидным JSON без markdown.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 512
+      },
+      axiosConfig
+    );
+
+    const content = response.data.choices[0].message.content.trim();
+    let jsonContent = content.replace(/``````\n?/g, '');
+    
+    const plantData = JSON.parse(jsonContent);
+    console.log(`✅ Groq перевел: ${plantData.name}`);
+    
+    return plantData;
+  } catch (error) {
+    console.error('❌ Ошибка Groq:', error.message);
+    return null; // Возвращаем null вместо ошибки
+  }
+}
+
 // Чат с Гигачатом (у тебя уже работал)
 app.post('/api/chat', async (req, res) => {
   try {
@@ -467,90 +537,33 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Обогащение карточки растения через GigaChat
+// Обогащение карточки растения через Groq
 app.post('/api/plants/enrich', async (req, res) => {
   try {
     const { scientificName } = req.body;
+    
     if (!scientificName) {
       return res.status(400).json({ error: 'scientificName required' });
     }
 
-    console.log(`🧠 GigaChat enrich: ${scientificName}`);
-
-    const accessToken = await getAccessToken();
-
-    const systemMessage = {
-      role: 'system',
-      content: 'Ты ботаник-эксперт. Отвечай ТОЛЬКО в виде валидного JSON без лишнего текста.'
-    };
-
-    const userPrompt = `
-Для растения "${scientificName}" верни ТОЛЬКО JSON в формате:
-
-{
-  "name": "Русское название",
-  "color": "green|purple|red|yellow|white",
-  "habitat": "indoor|garden|tropical|desert",
-  "size": "small|medium|large",
-  "category": "foliage|flowering",
-  "categoryName": "Название категории",
-  "description": "Короткое описание (2-3 предложения)",
-  "care": {
-    "watering": "1-2 раза в неделю",
-    "light": "яркий рассеянный",
-    "temperature": "18-27°C",
-    "humidity": "60-80%"
-  },
-  "features": ["черта1", "черта2"],
-  "dangers": "не ядовитое",
-  "maintenance": "низкий|средний|высокий"
-}
-`;
-
-    const response = await axios.post(
-      'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
-      {
-        model: 'GigaChat',
-        messages: [systemMessage, { role: 'user', content: userPrompt }],
-        temperature: 0.1,
-        max_tokens: 1024
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
-        },
-        httpsAgent
-      }
-    );
-
-    let gigaChatData = null;
-    try {
-      gigaChatData = JSON.parse(response.data.choices[0].message.content);
-    } catch (e) {
-      console.error('❌ JSON parse error GigaChat:', e.message);
-      console.error('RAW content:', response.data.choices[0].message.content);
-      return res.status(500).json({
-        error: 'Bad JSON from GigaChat',
-        raw: response.data.choices[0].message.content
-      });
-    }
-
-    console.log(`✅ GigaChat filled data for ${scientificName}`);
-
+    console.log(`🧠 Groq enrich: ${scientificName}`);
+    
+    const groqData = await translatePlantWithGroq(scientificName);
+    
     res.json({
       scientificName,
       enriched: true,
-      data: gigaChatData
+      data: groqData
     });
   } catch (error) {
-    console.error('❌ GigaChat enrich error:', error.response?.status, error.message);
+    console.error('❌ Groq enrich error:', error.message);
     res.status(500).json({
-      error: 'GigaChat enrichment failed',
-      details: error.response?.data || error.message
+      error: 'Groq enrichment failed',
+      details: error.message
     });
   }
 });
+
 
 // ========================
 // HEALTH CHECK
