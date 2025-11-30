@@ -230,13 +230,6 @@ const DiseaseDetection: React.FC = () => {
                   </div>
                 )}
 
-                {bestMatch.severity && (
-                  <div className="match-info">
-                    <span className="info-label">Тип проблемы:</span>
-                    <span className="info-value">{bestMatch.severity}</span>
-                  </div>
-                )}
-
                 {bestMatch.description && (
                   <div className="match-info">
                     <span className="info-label">Описание:</span>
@@ -284,11 +277,6 @@ const DiseaseDetection: React.FC = () => {
                         <div className="disease-name-small">{disease.name}</div>
                         {disease.scientific_name && (
                           <div className="disease-scientific">{disease.scientific_name}</div>
-                        )}
-                        {disease.common_names && disease.common_names.length > 0 && (
-                          <div className="disease-common">
-                            Также известно как: {disease.common_names.join(', ')}
-                          </div>
                         )}
                         {disease.description && (
                           <div className="disease-desc">{disease.description}</div>

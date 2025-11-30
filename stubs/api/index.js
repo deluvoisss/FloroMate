@@ -576,6 +576,70 @@ if (!PLANT_ID_API_KEY) {
   console.log('✅ PLANT_ID_API_KEY загружен');
 }
 
+// ========================
+// PLANT.ID HEALTH ASSESSMENT (DISEASE DETECTION) - ПОЛНОСТЬЮ НА РУССКОМ
+// ========================
+const diseaseTranslations = {
+  'rust': 'Ржавчина',
+  'fungi': 'Грибки',
+  'fungus': 'Грибок',
+  'animalia': 'Животные вредители',
+  'insecta': 'Насекомые',
+  'senescence': 'Старение',
+  'mold': 'Плесень',
+  'mildew': 'Мучнистая роса',
+  'blight': 'Фитофтороз',
+  'rot': 'Гниль',
+  'wilt': 'Увядание',
+  'spot': 'Пятнистость',
+  'leaf spot': 'Пятнистость листьев',
+  'powdery mildew': 'Мучнистая роса',
+  'downy mildew': 'Ложная мучнистая роса',
+  'anthracnose': 'Антракноз',
+  'canker': 'Рак растений',
+  'scab': 'Парша',
+  'virus': 'Вирус',
+  'bacteria': 'Бактерии',
+  'bacterial': 'Бактериальный',
+  'fungal': 'Грибковый',
+  'pest': 'Вредитель',
+  'disease': 'Болезнь',
+  'nutrient deficiency': 'Дефицит питательных веществ',
+  'nitrogen deficiency': 'Дефицит азота',
+  'iron deficiency': 'Дефицит железа',
+  'water stress': 'Водный стресс',
+  'sunburn': 'Солнечный ожог',
+  'frost damage': 'Повреждение морозом'
+};
+
+// Функция перевода названия болезни (ИСПРАВЛЕННАЯ)
+function translateDiseaseName(englishName) {
+  // Проверяем, что это строка
+  if (!englishName || typeof englishName !== 'string') {
+    return 'Неизвестная проблема';
+  }
+  
+  const lowerName = englishName.toLowerCase().trim();
+  
+  // Точное совпадение
+  if (diseaseTranslations[lowerName]) {
+    return diseaseTranslations[lowerName];
+  }
+  
+  // Частичное совпадение
+  for (const [eng, rus] of Object.entries(diseaseTranslations)) {
+    if (lowerName.includes(eng)) {
+      return rus;
+    }
+  }
+  
+  // Если перевод не найден, возвращаем оригинал
+  return englishName;
+}
+
+// ========================
+// PLANT.ID HEALTH ASSESSMENT - ПОЛНОСТЬЮ НА РУССКОМ
+// ========================
 app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
   try {
     console.log('🦠 Получен запрос на определение болезни растения');
@@ -588,21 +652,26 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
       return res.status(500).json({ error: 'PLANT_ID_API_KEY не настроен на сервере' });
     }
 
-    // Конвертируем изображение в base64
     const base64Image = req.file.buffer.toString('base64');
-
+    
     console.log('🚀 Отправляем запрос к Plant.id Health Assessment API...');
 
     const requestBody = {
       images: [`data:image/jpeg;base64,${base64Image}`],
-      modifiers: ['health_all'],
-      disease_details: ['description', 'treatment', 'classification', 'common_names', 'url']
+      latitude: 49.207,
+      longitude: 16.608,
+      similar_images: true,
+      health: 'all'
     };
 
     const axiosConfig = {
       headers: {
         'Api-Key': PLANT_ID_API_KEY,
         'Content-Type': 'application/json'
+      },
+      params: {
+        language: 'ru',
+        details: 'common_names,description,treatment,classification,cause,url'
       },
       timeout: 60000
     };
@@ -614,47 +683,60 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
     }
 
     const response = await axios.post(
-      'https://api.plant.id/v2/health_assessment',
+      'https://api.plant.id/v3/health_assessment',
       requestBody,
       axiosConfig
     );
 
     const data = response.data;
-    
     console.log('✅ Результат получен от Plant.id');
-    console.log('Полный ответ:', JSON.stringify(data, null, 2));
 
-    // Проверяем различные форматы ответа
-    const isHealthy = data.is_healthy?.binary ?? data.is_healthy ?? false;
-    const isHealthyProb = data.is_healthy?.probability ?? data.is_healthy_probability ?? 0;
-    const diseaseSuggestions = data.health_assessment?.diseases ?? data.disease?.suggestions ?? [];
+    const isHealthy = data.result?.is_healthy?.binary ?? true;
+    const isHealthyProb = data.result?.is_healthy?.probability ?? 1;
+    const diseaseSuggestions = data.result?.disease?.suggestions ?? [];
 
     console.log('Здоровое растение:', isHealthy);
     console.log('Найдено болезней:', diseaseSuggestions.length);
 
-    // Форматируем ответ
+    // Форматируем ответ с РУССКИМИ названиями
     const formattedResponse = {
       is_healthy: isHealthy,
       is_healthy_probability: isHealthyProb,
-      diseases: diseaseSuggestions.map(disease => ({
-        name: disease.name ?? disease.disease_name ?? 'Неизвестная болезнь',
-        probability: disease.probability ?? disease.confidence ?? 0,
-        scientific_name: disease.details?.scientific_name ?? disease.scientific_name,
-        description: disease.details?.description ?? disease.description,
-        treatment: disease.details?.treatment ?? disease.treatment,
-        common_names: disease.details?.common_names ?? disease.common_names ?? [],
-        url: disease.details?.url ?? disease.url,
-        classification: disease.details?.classification ?? disease.classification
-      })),
-      best_match: diseaseSuggestions.length > 0 ? {
-        disease_name: diseaseSuggestions[0].name ?? diseaseSuggestions[0].disease_name ?? 'Неизвестная болезнь',
-        confidence: diseaseSuggestions[0].probability ?? diseaseSuggestions[0].confidence ?? 0,
-        scientific_name: diseaseSuggestions[0].details?.scientific_name ?? diseaseSuggestions[0].scientific_name,
-        description: diseaseSuggestions[0].details?.description ?? diseaseSuggestions[0].description,
-        treatment: diseaseSuggestions[0].details?.treatment ?? diseaseSuggestions[0].treatment,
-        severity: diseaseSuggestions[0].details?.classification?.includes('pest') ? 'Вредитель' : 
-                 diseaseSuggestions[0].details?.classification?.includes('disease') ? 'Болезнь' : 'Проблема'
-      } : null
+      diseases: diseaseSuggestions.map(disease => {
+        // Пытаемся получить русское название из API или переводим сами
+        const apiRussianName = disease.details?.common_names?.[0];
+        const translatedName = translateDiseaseName(disease.name);
+        const russianName = apiRussianName || translatedName;
+        
+        return {
+          name: russianName,
+          scientific_name: disease.name || '',
+          common_names: disease.details?.common_names || [russianName],
+          probability: disease.probability ?? 0,
+          description: disease.details?.description || null,
+          treatment: disease.details?.treatment?.biological || disease.details?.treatment?.chemical || disease.details?.treatment?.prevention || null,
+          url: disease.details?.url || null,
+          cause: disease.details?.cause || null,
+          classification: disease.details?.classification ? translateDiseaseName(disease.details.classification) : 'Проблема'
+        };
+      }),
+      best_match: diseaseSuggestions.length > 0 ? (() => {
+        const topDisease = diseaseSuggestions[0];
+        const apiRussianName = topDisease.details?.common_names?.[0];
+        const translatedName = translateDiseaseName(topDisease.name);
+        const russianName = apiRussianName || translatedName;
+        
+        return {
+          disease_name: russianName,
+          scientific_name: topDisease.name || '',
+          common_names: topDisease.details?.common_names || [russianName],
+          confidence: topDisease.probability ?? 0,
+          description: topDisease.details?.description || null,
+          treatment: topDisease.details?.treatment || null,
+          cause: topDisease.details?.cause || null,
+          severity: topDisease.details?.classification ? translateDiseaseName(topDisease.details.classification) : 'Проблема'
+        };
+      })() : null
     };
 
     res.json(formattedResponse);
