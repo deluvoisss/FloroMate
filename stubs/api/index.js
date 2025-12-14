@@ -26,6 +26,7 @@ const GIGACHAT_SCOPE = 'GIGACHAT_API_PERS';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/floromate_db';
 const PLANT_ID_API_KEY = process.env.PLANT_ID_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Проверка GROQ_API_KEY
 if (!GROQ_API_KEY) {
@@ -765,6 +766,192 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
   }
 });
 
+// ========================
+// LANDSCAPE DESIGN ROUTES
+// ========================
+
+app.post('/api/landscape/generate', upload.single('image'), async (req, res) => {
+  try {
+    console.log('🌿 Получен запрос на генерацию ландшафта');
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'Загрузите изображение ландшафта' });
+    }
+
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY не настроен на сервере' });
+    }
+
+    console.log('📋 Размер файла:', req.file.size, 'байт');
+    console.log('📋 MIME тип:', req.file.mimetype);
+
+    const prompt = req.body.prompt || 'Process this landscape image to make it realistic, aesthetically beautiful, and feasible to implement in reality. Enhance the landscape with natural elements like plants, flowers, trees, and shrubs, but do not change the image drastically. Keep the original composition and perspective while improving the visual appeal and adding realistic landscaping elements.';
+    
+    const base64Image = req.file.buffer.toString('base64');
+    
+    console.log('🚀 Отправка запроса к Gemini API...');
+    
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`;
+    
+    const requestBody = {
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType: req.file.mimetype,
+                data: base64Image
+              }
+            },
+            {
+              text: prompt
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"]
+      }
+    };
+
+    const axiosConfig = {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 120000,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity
+    };
+
+    if (PROXY_SERVER) {
+      try {
+        axiosConfig.httpAgent = new HttpProxyAgent(PROXY_SERVER);
+        axiosConfig.httpsAgent = new HttpsProxyAgent(PROXY_SERVER);
+        console.log('🔌 Прокси настроен для Gemini API');
+      } catch (proxyError) {
+        console.error('❌ Ошибка настройки прокси:', proxyError.message);
+        throw new Error(`Прокси обязателен для работы с Gemini API: ${proxyError.message}`);
+      }
+    } else {
+      console.warn('⚠️ PROXY_SERVER не установлен!');
+    }
+
+    let response;
+    let retries = 0;
+    const maxRetries = 3;
+    const baseDelay = 2000;
+
+    while (retries <= maxRetries) {
+      try {
+        response = await axios.post(geminiUrl, requestBody, axiosConfig);
+        break;
+      } catch (error) {
+        if (error.response?.status === 429 && retries < maxRetries) {
+          const delay = baseDelay * Math.pow(2, retries);
+          retries++;
+          console.warn(`⚠️ Rate limit (429), попытка ${retries}/${maxRetries}, ждем ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw error;
+      }
+    }
+    
+    console.log('✅ Ответ получен от Gemini API');
+    
+    if (!response.data || !response.data.candidates || response.data.candidates.length === 0) {
+      throw new Error('Пустой ответ от Gemini API');
+    }
+
+    const candidate = response.data.candidates[0];
+    
+    if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+      if (candidate.finishReason === 'SAFETY') {
+        throw new Error('Запрос был заблокирован системой безопасности');
+      }
+    }
+
+    if (!candidate.content || !candidate.content.parts) {
+      throw new Error('Неверный формат ответа от Gemini API');
+    }
+    
+    let generatedImageData = null;
+    let generatedText = null;
+
+    for (const part of candidate.content.parts) {
+      if (part.inlineData && part.inlineData.data) {
+        generatedImageData = part.inlineData.data;
+        console.log('✅ Изображение найдено в inlineData.data');
+      } else if (part.inline_data && part.inline_data.data) {
+        generatedImageData = part.inline_data.data;
+        console.log('✅ Изображение найдено в inline_data.data');
+      } else if (part.text) {
+        generatedText = part.text;
+      }
+    }
+
+    if (!generatedImageData) {
+      throw new Error('Gemini API не вернул сгенерированное изображение');
+    }
+
+    generatedImageData = generatedImageData.trim().replace(/\s/g, '').replace(/\n/g, '').replace(/\r/g, '');
+    
+    const padding = generatedImageData.length % 4;
+    if (padding !== 0) {
+      generatedImageData += '='.repeat(4 - padding);
+    }
+    
+    if (!/^[A-Za-z0-9+/=]+$/.test(generatedImageData)) {
+      throw new Error('Полученные данные не являются валидным base64 изображением');
+    }
+
+    try {
+      Buffer.from(generatedImageData, 'base64');
+    } catch (decodeError) {
+      throw new Error(`Ошибка декодирования base64: ${decodeError.message}`);
+    }
+
+    const resultDataUrl = `data:image/png;base64,${generatedImageData}`;
+    
+    console.log('✅ Генерация завершена успешно');
+    
+    res.json({
+      imageUrl: resultDataUrl,
+      prompt: prompt,
+      message: generatedText || 'Ландшафт успешно обработан с помощью Gemini 2.5 Flash Image!'
+    });
+
+  } catch (error) {
+    console.error('❌ Ошибка генерации ландшафта:', {
+      message: error.message,
+      status: error.response?.status
+    });
+    
+    if (error.response?.status === 429) {
+      return res.status(429).json({
+        error: 'Превышен лимит запросов к Gemini API',
+        message: 'Слишком много запросов. Пожалуйста, подождите немного и попробуйте снова.',
+        retryAfter: error.response.headers['retry-after'] || 60
+      });
+    }
+    
+    try {
+      const base64Image = req.file.buffer.toString('base64');
+      const dataUrl = `data:${req.file.mimetype};base64,${base64Image}`;
+      
+      res.json({
+        imageUrl: dataUrl,
+        prompt: req.body.prompt || 'Add beautiful plants to this landscape',
+        message: `Ошибка генерации: ${error.message}. Возвращено оригинальное изображение.`
+      });
+    } catch (fallbackError) {
+      res.status(500).json({
+        error: 'Ошибка обработки изображения',
+        details: error.message
+      });
+    }
+  }
+});
 
 // Запуск сервера
 app.listen(PORT, () => {
@@ -777,5 +964,6 @@ app.listen(PORT, () => {
   console.log('POST /api/plants/recognize - сохранить распознанное растение');
   console.log('POST /api/plants/enrich - обогащение данных растения (GigaChat)');
   console.log('GET /api/plants/photo - фото растения (Perenual)');
+  console.log('POST /api/landscape/generate - генерация дизайна ландшафта');
   console.log('GET /api/health - проверка состояния API');
 });
