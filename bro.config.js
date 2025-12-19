@@ -1,7 +1,7 @@
 const pkg = require("./package");
 
 module.exports = {
-  apiPath: "stubs/api",
+  
   webpackConfig: {
     output: {
       publicPath: `/static/${pkg.name}/${process.env.VERSION || pkg.version}/`,
@@ -10,14 +10,25 @@ module.exports = {
       historyApiFallback: true, 
       hot: true,
       port: 8099,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        }
+      }
     },
     resolve: {
-    fallback: {
-      "path": require.resolve("path-browserify"),
-      "os": require.resolve("os-browserify/browser"),
-      "crypto": require.resolve("crypto-browserify")
+      fallback: {
+        "path": require.resolve("path-browserify"),
+        "os": require.resolve("os-browserify/browser"),
+        "crypto": require.resolve("crypto-browserify")
+      }
     }
-  }
+  },
+
+  api: {
+    port: 3001,
+    script: './stubs/api/index.js', 
   },
   
   navigations: {

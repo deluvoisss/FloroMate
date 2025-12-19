@@ -318,6 +318,142 @@
   animation: spinCoin 3s ease-in-out forwards;
 }
 
+/* Заблокированные элементы */
+.nav-item.locked,
+.dropdown-item.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+  position: relative;
+}
+
+.nav-item.locked:hover {
+  transform: none;
+  background: rgba(72, 89, 53, 0.1);
+}
+
+/* Замочек */
+.lock-icon {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Тултип */
+.tooltip {
+  position: absolute;
+  bottom: -35px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 1001;
+}
+
+.nav-item.locked:hover .tooltip {
+  opacity: 1;
+}
+
+/* Меню пользователя */
+.user-menu-wrapper {
+  position: relative;
+}
+
+.user-button {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-dropdown {
+  right: 0;
+  left: auto;
+  min-width: 250px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 18px;
+  cursor: default;
+}
+
+.user-info:hover {
+  background: transparent;
+}
+
+.user-info strong {
+  font-size: 16px;
+  color: #FBFBFB;
+}
+
+.user-info small {
+  font-size: 13px;
+  color: rgba(251, 251, 251, 0.7);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: rgba(202, 219, 183, 0.3);
+  margin: 6px 0;
+}
+
+.dropdown-item.logout {
+  color: #ff6b6b;
+}
+
+.dropdown-item.logout:hover {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+/* Dropdown для заблокированных элементов */
+.dropdown-item.locked {
+  pointer-events: none;
+}
+
+.dropdown-item.locked:hover {
+  background: transparent;
+}
+
+/* Адаптация для мобильных */
+@media (max-width: 768px) {
+  .lock-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    top: -6px;
+    right: -6px;
+  }
+
+  .tooltip {
+    font-size: 11px;
+    padding: 5px 10px;
+    bottom: -32px;
+  }
+
+  .user-dropdown {
+    min-width: 220px;
+  }
+}
+
+
 
 /* Адаптивность */
 @media (max-width: 1024px) {
