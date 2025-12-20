@@ -22,11 +22,12 @@ const PORT = 3001;
 const API_KEY = process.env.API_KEY;
 const PROXY_SERVER = process.env.PROXY_SERVER;
 const GIGACHAT_AUTH_KEY = process.env.GIGACHAT_AUTH_KEY;
+// Отдельный ключ для ландшафтного дизайна (GigaChat Pro)
+const GIGACHAT_AUTH_KEY2 = process.env.GIGACHAT_AUTH_KEY2;
 const GIGACHAT_SCOPE = 'GIGACHAT_API_PERS';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/floromate_db';
 const PLANT_ID_API_KEY = process.env.PLANT_ID_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Проверка GROQ_API_KEY
 if (!GROQ_API_KEY) {
@@ -63,6 +64,10 @@ console.log('✅ GIGACHAT_AUTH_KEY загружен');
 console.log('✅ DATABASE_URL:', DATABASE_URL);
 if (PROXY_SERVER) {
   console.log('🔌 Proxy сервер:', PROXY_SERVER);
+}
+
+if (!GIGACHAT_AUTH_KEY2) {
+  console.warn('⚠️ GIGACHAT_AUTH_KEY2 не найден в .env — раздел ландшафтного дизайна работать не будет');
 }
 
 // Безопасные заголовки
@@ -428,6 +433,46 @@ async function getAccessToken() {
   }
 }
 
+// Отдельный токен для ландшафтного дизайна (использует GIGACHAT_AUTH_KEY2)
+let landscapeToken = null;
+let landscapeTokenExpiry = null;
+
+async function getLandscapeAccessToken() {
+  if (landscapeToken && landscapeTokenExpiry && Date.now() < landscapeTokenExpiry) {
+    console.log('🔑 Используем кэшированный токен (landscape)');
+    return landscapeToken;
+  }
+
+  if (!GIGACHAT_AUTH_KEY2) {
+    throw new Error('GIGACHAT_AUTH_KEY2 не настроен в .env');
+  }
+
+  try {
+    console.log('🔑 Запрашиваем новый токен для ландшафтного дизайна...');
+    const response = await axios.post(
+      'https://ngw.devices.sberbank.ru:9443/api/v2/oauth',
+      `scope=${GIGACHAT_SCOPE}`,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+          'RqUID': uuidv4(),
+          'Authorization': `Basic ${GIGACHAT_AUTH_KEY2}`
+        },
+        httpsAgent
+      } 
+    );
+
+    landscapeToken = response.data.access_token;
+    landscapeTokenExpiry = Date.now() + 29 * 60 * 1000;
+    console.log('✅ Токен для ландшафтного дизайна получен успешно');
+    return landscapeToken;
+  } catch (error) {
+    console.error('❌ Ошибка получения токена для ландшафтного дизайна:', error.message);
+    throw error;
+  }
+}
+
 // ========================
 // GROQ AI TRANSLATION
 // ========================
@@ -767,189 +812,405 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
 });
 
 // ========================
-// LANDSCAPE DESIGN ROUTES
+// LANDSCAPE DESIGN ROUTES (GigaChat Pro)
 // ========================
 
 app.post('/api/landscape/generate', upload.single('image'), async (req, res) => {
   try {
-    console.log('🌿 Получен запрос на генерацию ландшафта');
-    
+    console.log('🌿 Получен запрос на генерацию ландшафта (GigaChat Pro)');
+
     if (!req.file) {
       return res.status(400).json({ error: 'Загрузите изображение ландшафта' });
     }
 
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY не настроен на сервере' });
+    if (!GIGACHAT_AUTH_KEY2) {
+      return res.status(500).json({ error: 'GIGACHAT_AUTH_KEY2 не настроен на сервере' });
     }
 
     console.log('📋 Размер файла:', req.file.size, 'байт');
     console.log('📋 MIME тип:', req.file.mimetype);
 
-    const prompt = req.body.prompt || 'Process this landscape image to make it realistic, aesthetically beautiful, and feasible to implement in reality. Enhance the landscape with natural elements like plants, flowers, trees, and shrubs, but do not change the image drastically. Keep the original composition and perspective while improving the visual appeal and adding realistic landscaping elements.';
-    
-    const base64Image = req.file.buffer.toString('base64');
-    
-    console.log('🚀 Отправка запроса к Gemini API...');
-    
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`;
-    
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: req.file.mimetype,
-                data: base64Image
-              }
-            },
-            {
-              text: prompt
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        responseModalities: ["TEXT", "IMAGE"]
-      }
-    };
+    const userPrompt =
+      req.body.prompt ||
+      'Сделай этот ландшафт реалистичным, эстетически красивым и реализуемым в реальности. ' +
+      'Добавь растения, деревья, кустарники и другие элементы ландшафтного дизайна, ' +
+      'но не изменяй кардинально композицию и перспективу. Улучши внешний вид участка, ' +
+      'сохраняя его структуру.';
 
-    const axiosConfig = {
-      headers: {
-        'Content-Type': 'application/json'
+    // 1. Получаем access token для GigaChat Pro
+    const accessToken = await getLandscapeAccessToken();
+
+    // 2. Загружаем изображение в файловое хранилище GigaChat
+    console.log('📤 Этап 1: Загружаем изображение в хранилище GigaChat...');
+    const uploadForm = new FormData();
+    uploadForm.append('file', req.file.buffer, {
+      filename: req.file.originalname || 'landscape.jpg',
+      contentType: req.file.mimetype,
+    });
+    uploadForm.append('purpose', 'general');
+
+    const uploadResponse = await axios.post(
+      'https://gigachat.devices.sberbank.ru/api/v1/files',
+      uploadForm,
+      {
+        headers: {
+          ...uploadForm.getHeaders(),
+          Authorization: `Bearer ${accessToken}`,
+        },
+        httpsAgent,
+        timeout: 60000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
+    );
+
+    const fileId = uploadResponse.data?.id;
+    if (!fileId) {
+      throw new Error('Не удалось получить идентификатор загруженного файла от GigaChat');
+    }
+    console.log('✅ Файл загружен в GigaChat, id:', fileId);
+
+    // 3. Этап 1: Анализируем изображение и получаем детальное промпт-описание для улучшенной версии
+    console.log('🔍 Этап 1: Анализируем изображение и создаем промпт для улучшенной версии...');
+    
+    const analysisResponse = await axios.post(
+      'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
+      {
+        model: 'GigaChat-Pro',
+        messages: [
+          {
+            role: 'system',
+            content: 'Ты профессиональный ландшафтный дизайнер и эксперт по описанию изображений. ' +
+              'Твоя задача - детально описать изображение ландшафта и создать точное текстовое описание ' +
+              'улучшенной версии этого ландшафта для последующей генерации изображения. ' +
+              'Описание должно быть максимально детальным и включать все элементы: растения, деревья, ' +
+              'кустарники, структуру участка, перспективу, освещение, цвета, стиль дизайна.',
+          },
+          {
+            role: 'user',
+            content: `Проанализируй это изображение ландшафта. Учти следующие пожелания: ${userPrompt}. ` +
+              `Создай детальное текстовое описание улучшенной версии этого ландшафта. ` +
+              `Описание должно быть максимально точным и детальным, чтобы по нему можно было сгенерировать ` +
+              `реалистичное изображение улучшенного ландшафтного дизайна. ` +
+              `Верни только описание, без дополнительных комментариев.`,
+            attachments: [fileId],
+          },
+        ],
+        stream: false,
+        update_interval: 0,
       },
-      timeout: 120000,
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity
-    };
-
-    if (PROXY_SERVER) {
-      try {
-        axiosConfig.httpAgent = new HttpProxyAgent(PROXY_SERVER);
-        axiosConfig.httpsAgent = new HttpsProxyAgent(PROXY_SERVER);
-        console.log('🔌 Прокси настроен для Gemini API');
-      } catch (proxyError) {
-        console.error('❌ Ошибка настройки прокси:', proxyError.message);
-        throw new Error(`Прокси обязателен для работы с Gemini API: ${proxyError.message}`);
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        httpsAgent,
+        timeout: 120000,
       }
-    } else {
-      console.warn('⚠️ PROXY_SERVER не установлен!');
+    );
+
+    const imageDescription = 
+      analysisResponse.data?.choices?.[0]?.message?.content ||
+      analysisResponse.data?.message?.content ||
+      '';
+
+    if (!imageDescription || imageDescription.trim().length < 50) {
+      throw new Error('Не удалось получить детальное описание изображения от GigaChat Pro');
     }
 
-    let response;
-    let retries = 0;
-    const maxRetries = 3;
-    const baseDelay = 2000;
+    console.log('✅ Получено описание для генерации (длина:', imageDescription.length, 'символов)');
+    console.log('📋 Промпт:', imageDescription.substring(0, 200) + '...');
 
-    while (retries <= maxRetries) {
-      try {
-        response = await axios.post(geminiUrl, requestBody, axiosConfig);
-        break;
-      } catch (error) {
-        if (error.response?.status === 429 && retries < maxRetries) {
-          const delay = baseDelay * Math.pow(2, retries);
-          retries++;
-          console.warn(`⚠️ Rate limit (429), попытка ${retries}/${maxRetries}, ждем ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
+    // 4. Этап 2: Генерируем улучшенное изображение по детальному описанию используя text2image
+    console.log('🎨 Этап 2: Генерируем улучшенное изображение по описанию...');
+    
+    const chatResponse = await axios.post(
+      'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
+      {
+        model: 'GigaChat-Pro',
+        messages: [
+          {
+            role: 'user',
+            content: `Сгенерируй реалистичное изображение ландшафтного дизайна по следующему детальному описанию: ${imageDescription}`,
+          },
+        ],
+        stream: false,
+        update_interval: 0,
+        function_call: 'auto', // Включаем автоматический вызов функции text2image
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        httpsAgent,
+        timeout: 180000, // Увеличиваем таймаут до 3 минут для генерации изображений
+      }
+    );
+
+    // Логируем полную структуру ответа для отладки
+    console.log('✅ Ответ GigaChat Pro получен. Полная структура ответа:');
+    console.log(JSON.stringify(chatResponse.data, null, 2));
+    
+    // Ответ может быть в формате { message: { content: "<img src=\"...\"/>", ... } }
+    // или в openai-совместимом формате с choices[0].message.content
+    const rawMessageContent =
+      chatResponse.data?.message?.content ||
+      chatResponse.data?.choices?.[0]?.message?.content ||
+      '';
+
+    console.log('✅ Извлеченный Content:', rawMessageContent);
+    console.log('✅ Тип content:', typeof rawMessageContent);
+    console.log('✅ Длина content:', rawMessageContent?.length || 0);
+    
+    // Проверяем все возможные поля, где может быть изображение
+    console.log('✅ Структура choices[0].message:', JSON.stringify(chatResponse.data?.choices?.[0]?.message, null, 2));
+
+    // Проверяем function_call в ответе - если использовался function calling для text2image
+    const functionCall = chatResponse.data?.choices?.[0]?.message?.function_call;
+    if (functionCall) {
+      console.log('🔧 Обнаружен function_call:', JSON.stringify(functionCall, null, 2));
+      
+      // Если функция text2image была вызвана, результат может быть в function_call.result или в следующем ответе
+      if (functionCall.name === 'text2image' || functionCall.function_name === 'text2image') {
+        console.log('🎨 Найден вызов функции text2image');
+        
+        // Результат может быть в function_call.arguments или в отдельном поле
+        const functionResult = functionCall.result || functionCall.arguments;
+        console.log('📋 Результат function_call:', functionResult);
+        
+        // Если есть image_id или file_id в результате
+        if (functionResult && typeof functionResult === 'string') {
+          try {
+            const parsed = JSON.parse(functionResult);
+            if (parsed.image_id || parsed.file_id || parsed.id) {
+              const imageId = parsed.image_id || parsed.file_id || parsed.id;
+              console.log('🎨 Найден ID изображения в function_call.result:', imageId);
+              
+              // Скачиваем изображение
+              try {
+                const fileResponse = await axios.get(
+                  `https://gigachat.devices.sberbank.ru/api/v1/files/${imageId}/content`,
+                  {
+                    headers: {
+                      Accept: 'image/jpeg, image/png, image/*',
+                      Authorization: `Bearer ${accessToken}`,
+                    },
+                    httpsAgent,
+                    responseType: 'arraybuffer',
+                    timeout: 120000,
+                  }
+                );
+                
+                const contentType = fileResponse.headers['content-type'] || 'image/jpeg';
+                const base64Image = Buffer.from(fileResponse.data, 'binary').toString('base64');
+                const dataUrl = `data:${contentType};base64,${base64Image}`;
+                
+                return res.json({
+                  imageUrl: dataUrl,
+                  prompt: userPrompt,
+                  generatedPrompt: imageDescription,
+                  message: 'Ландшафт успешно обработан с помощью GigaChat Pro',
+                });
+              } catch (fileError) {
+                console.error('❌ Ошибка при скачивании файла из function_call:', fileError.message);
+              }
+            }
+          } catch (e) {
+            console.log('⚠️ Не удалось распарсить function_call.result как JSON');
+          }
         }
-        throw error;
-      }
-    }
-    
-    console.log('✅ Ответ получен от Gemini API');
-    
-    if (!response.data || !response.data.candidates || response.data.candidates.length === 0) {
-      throw new Error('Пустой ответ от Gemini API');
-    }
-
-    const candidate = response.data.candidates[0];
-    
-    if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-      if (candidate.finishReason === 'SAFETY') {
-        throw new Error('Запрос был заблокирован системой безопасности');
       }
     }
 
-    if (!candidate.content || !candidate.content.parts) {
-      throw new Error('Неверный формат ответа от Gemini API');
+    // Проверяем, есть ли изображение в base64 прямо в ответе
+    const base64ImageMatch = rawMessageContent.match(/data:image\/([^;]+);base64,([A-Za-z0-9+/=]+)/);
+    if (base64ImageMatch) {
+      console.log('✅ Найдено изображение в base64 прямо в ответе');
+      const dataUrl = base64ImageMatch[0];
+      return res.json({
+        imageUrl: dataUrl,
+        prompt: userPrompt,
+        generatedPrompt: imageDescription,
+        message: 'Ландшафт успешно обработан с помощью GigaChat Pro',
+      });
     }
-    
-    let generatedImageData = null;
-    let generatedText = null;
 
-    for (const part of candidate.content.parts) {
-      if (part.inlineData && part.inlineData.data) {
-        generatedImageData = part.inlineData.data;
-        console.log('✅ Изображение найдено в inlineData.data');
-      } else if (part.inline_data && part.inline_data.data) {
-        generatedImageData = part.inline_data.data;
-        console.log('✅ Изображение найдено в inline_data.data');
-      } else if (part.text) {
-        generatedText = part.text;
+    // Парсим ID изображения из тега <img src="ID"/> или других форматов
+    const imgMatch = rawMessageContent.match(/<img[^>]*src=["']([^"']+)["']/);
+    
+    // Также проверяем другие возможные форматы: file://, просто ID, UUID и т.д.
+    let generatedImageId = null;
+    
+    if (imgMatch && imgMatch[1]) {
+      generatedImageId = imgMatch[1].trim();
+      console.log('🎨 Найден ID изображения из тега img:', generatedImageId);
+    } else {
+      // Пробуем найти ID в других форматах
+      // Проверяем attachments в сообщении
+      const messageAttachments = 
+        chatResponse.data?.choices?.[0]?.message?.attachments ||
+        chatResponse.data?.message?.attachments ||
+        [];
+      
+      console.log('📎 Проверяем attachments в сообщении:', JSON.stringify(messageAttachments, null, 2));
+      
+      if (messageAttachments.length > 0) {
+        // Ищем file_id или id в attachments
+        const attachment = messageAttachments.find(a => a.file_id || a.id) || messageAttachments[0];
+        generatedImageId = attachment.file_id || attachment.id;
+        console.log('🎨 Найден ID из attachments:', generatedImageId);
+      }
+      
+      // Проверяем другие поля в ответе, где может быть ID файла
+      if (!generatedImageId) {
+        const allKeys = Object.keys(chatResponse.data?.choices?.[0]?.message || {});
+        console.log('📋 Все ключи в message:', allKeys);
+        
+        // Проверяем, может быть изображение в других полях
+        if (chatResponse.data?.choices?.[0]?.message?.function_call) {
+          console.log('🔧 Найден function_call:', JSON.stringify(chatResponse.data.choices[0].message.function_call, null, 2));
+        }
+        
+        // Пробуем извлечь ID из текста ответа (может быть просто ID без тегов)
+        const idMatch = rawMessageContent.match(/[a-f0-9]{32,}/i);
+        if (idMatch) {
+          generatedImageId = idMatch[0];
+          console.log('🎨 Найден потенциальный ID из текста:', generatedImageId);
+        }
       }
     }
-
-    if (!generatedImageData) {
-      throw new Error('Gemini API не вернул сгенерированное изображение');
+    
+    if (!generatedImageId) {
+      console.error('❌ Не удалось найти ID изображения. Полная структура ответа:');
+      console.error(JSON.stringify({
+        data: chatResponse.data,
+        messageContent: rawMessageContent,
+        messageKeys: chatResponse.data?.choices?.[0]?.message ? Object.keys(chatResponse.data.choices[0].message) : []
+      }, null, 2));
+      
+      // Если в ответе есть сообщение об ошибке или ограничении, возвращаем его пользователю
+      const errorMessage = rawMessageContent || 'Неизвестная ошибка';
+      
+      // Возвращаем детальную информацию об ошибке с полной структурой ответа для отладки
+      return res.status(500).json({
+        error: 'GigaChat Pro не смог сгенерировать изображение',
+        message: errorMessage,
+        debug: {
+          hasContent: !!rawMessageContent,
+          contentLength: rawMessageContent?.length || 0,
+          contentPreview: rawMessageContent?.substring(0, 500),
+          hasAttachments: !!(chatResponse.data?.choices?.[0]?.message?.attachments?.length),
+          hasFunctionCall: !!chatResponse.data?.choices?.[0]?.message?.function_call,
+          responseStructure: {
+            hasChoices: !!chatResponse.data?.choices,
+            choicesLength: chatResponse.data?.choices?.length || 0,
+            messageKeys: chatResponse.data?.choices?.[0]?.message ? Object.keys(chatResponse.data.choices[0].message) : []
+          }
+        },
+        details: 'Возможно, GigaChat Pro не поддерживает редактирование изображений (image-to-image) через text2image. Проверьте документацию: https://developers.sber.ru/docs/ru/gigachat/guides/images-generation'
+      });
     }
 
-    generatedImageData = generatedImageData.trim().replace(/\s/g, '').replace(/\n/g, '').replace(/\r/g, '');
-    
-    const padding = generatedImageData.length % 4;
-    if (padding !== 0) {
-      generatedImageData += '='.repeat(4 - padding);
-    }
-    
-    if (!/^[A-Za-z0-9+/=]+$/.test(generatedImageData)) {
-      throw new Error('Полученные данные не являются валидным base64 изображением');
+    console.log('🎨 Идентификатор сгенерированного изображения для скачивания:', generatedImageId);
+
+    // Проверяем, что ID выглядит валидным
+    if (generatedImageId.includes('777777777777') || generatedImageId.length < 10) {
+      console.warn('⚠️ Подозрительный ID изображения:', generatedImageId);
     }
 
-    try {
-      Buffer.from(generatedImageData, 'base64');
-    } catch (decodeError) {
-      throw new Error(`Ошибка декодирования base64: ${decodeError.message}`);
+    // 4. Скачиваем сгенерированное изображение по его идентификатору
+    console.log('📥 Скачиваем сгенерированное изображение из GigaChat...');
+    
+    let fileResponse;
+    let retries = 2;
+    let lastError;
+    
+    // Пробуем скачать файл несколько раз с задержкой (файл может быть еще не готов)
+    while (retries > 0) {
+      try {
+        fileResponse = await axios.get(
+          `https://gigachat.devices.sberbank.ru/api/v1/files/${generatedImageId}/content`,
+          {
+            headers: {
+              Accept: 'image/jpeg, image/png, image/*',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            httpsAgent,
+            responseType: 'arraybuffer',
+            timeout: 120000,
+          }
+        );
+        break; // Успешно, выходим из цикла
+      } catch (fileError) {
+        lastError = fileError;
+        console.error(`❌ Ошибка при скачивании файла (попытка ${3 - retries + 1}):`, {
+          status: fileError.response?.status,
+          statusText: fileError.response?.statusText,
+          data: fileError.response?.data?.toString?.() || fileError.response?.data,
+          message: fileError.message,
+        });
+        
+        if (fileError.response?.status === 404) {
+          // Файл не найден - возможно нужно подождать или использовать другой endpoint
+          if (retries > 1) {
+            console.log('⏳ Файл еще не готов, ждем 2 секунды и пробуем снова...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            retries--;
+            continue;
+          }
+        } else {
+          // Другая ошибка - не пробуем снова
+          break;
+        }
+        retries--;
+      }
+    }
+    
+    if (!fileResponse) {
+      throw new Error(
+        `Файл с ID ${generatedImageId} не найден в хранилище GigaChat после нескольких попыток. ` +
+        `Статус: ${lastError?.response?.status}, Ошибка: ${lastError?.message}. ` +
+        `Проверьте документацию GigaChat API по работе с файлами: https://developers.sber.ru/docs/ru/gigachat/api/working-with-files`
+      );
     }
 
-    const resultDataUrl = `data:image/png;base64,${generatedImageData}`;
-    
-    console.log('✅ Генерация завершена успешно');
-    
+    const contentType = fileResponse.headers['content-type'] || 'image/jpeg';
+    const base64Image = Buffer.from(fileResponse.data, 'binary').toString('base64');
+    const dataUrl = `data:${contentType};base64,${base64Image}`;
+
+    console.log('✅ Ландшафт успешно сгенерирован GigaChat Pro');
+
     res.json({
-      imageUrl: resultDataUrl,
-      prompt: prompt,
-      message: generatedText || 'Ландшафт успешно обработан с помощью Gemini 2.5 Flash Image!'
+      imageUrl: dataUrl,
+      prompt: userPrompt,
+      generatedPrompt: imageDescription,
+      message: 'Ландшафт успешно обработан с помощью GigaChat Pro',
+    });
+  } catch (error) {
+    console.error('❌ Ошибка генерации ландшафта через GigaChat Pro:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
     });
 
-  } catch (error) {
-    console.error('❌ Ошибка генерации ландшафта:', {
-      message: error.message,
-      status: error.response?.status
-    });
-    
+    // Если это ошибка лимитов GigaChat — отдаем понятный ответ
     if (error.response?.status === 429) {
       return res.status(429).json({
-        error: 'Превышен лимит запросов к Gemini API',
+        error: 'Превышен лимит запросов к GigaChat Pro',
         message: 'Слишком много запросов. Пожалуйста, подождите немного и попробуйте снова.',
-        retryAfter: error.response.headers['retry-after'] || 60
+        retryAfter: error.response.headers?.['retry-after'] || 60,
       });
     }
-    
-    try {
-      const base64Image = req.file.buffer.toString('base64');
-      const dataUrl = `data:${req.file.mimetype};base64,${base64Image}`;
-      
-      res.json({
-        imageUrl: dataUrl,
-        prompt: req.body.prompt || 'Add beautiful plants to this landscape',
-        message: `Ошибка генерации: ${error.message}. Возвращено оригинальное изображение.`
-      });
-    } catch (fallbackError) {
-      res.status(500).json({
-        error: 'Ошибка обработки изображения',
-        details: error.message
-      });
-    }
+
+    // Больше не возвращаем оригинальное изображение — отдаем реальную ошибку
+    return res.status(error.response?.status || 500).json({
+      error: 'Ошибка генерации ландшафта через GigaChat Pro',
+      message: error.message,
+      details: error.response?.data || null,
+    });
   }
 });
 
