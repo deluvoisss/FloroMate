@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Plant, Filters, FilterType } from '../../types/plant';
+import Plant from '../types/plant'; // Подкорректируйте путь под ваш проект
 import './css/PlantModal.css';
 
 interface PlantModalProps {
@@ -10,91 +10,106 @@ interface PlantModalProps {
 const PlantModal: React.FC<PlantModalProps> = ({ plant, onClose }) => {
   useEffect(() => {
     document.body.style.overflow = 'hidden';
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+
     return () => {
       document.body.style.overflow = 'auto';
+      window.removeEventListener('keydown', handleEscape);
     };
-  }, []);
-
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
+
+  const features = Array.isArray(plant.features)
+    ? plant.features
+    : typeof plant.features === 'string'
+    ? [plant.features]
+    : [];
+
+  const dangers = Array.isArray(plant.dangers)
+    ? plant.dangers
+    : typeof plant.dangers === 'string'
+    ? [plant.dangers]
+    : [];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} aria-label="Закрыть">
-          ✕
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label="Close modal">
+          &times;
         </button>
-
         <div className="modal-body">
           <div className="modal-image">
-            <img src={plant.image} alt={plant.name} />
+            <img
+              src={plant.image || 'https://via.placeholder.com/400x300?text=No+Image'}
+              alt={plant.name || 'Plant'}
+            />
           </div>
-
           <div className="modal-info">
-            <h1 className="modal-title">{plant.name}</h1>
-            <p className="modal-scientific">{plant.scientificName}</p>
+            <h1 className="modal-title">{plant.name || 'Unknown Plant'}</h1>
+            <p className="modal-scientific">{plant.scientificName || ''}</p>
 
             <div className="info-section">
-              <h3 className="info-title">ℹ️ Основная информация</h3>
+              <h3 className="info-title">Plant Details</h3>
               <div className="info-grid">
                 <div className="info-item">
-                  <span className="info-label">Цвет:</span>
-                  <span className="info-value">{plant.color}</span>
+                  <span className="info-label">Color: </span>
+                  <span className="info-value">{plant.color || 'N/A'}</span>
                 </div>
                 <div className="info-item">
-                  <span className="info-label">Среда обитания:</span>
-                  <span className="info-value">{plant.habitat}</span>
+                  <span className="info-label">Habitat: </span>
+                  <span className="info-value">{plant.habitat || 'N/A'}</span>
                 </div>
                 <div className="info-item">
-                  <span className="info-label">Размер:</span>
-                  <span className="info-value">{plant.size}</span>
+                  <span className="info-label">Size: </span>
+                  <span className="info-value">{plant.size || 'N/A'}</span>
                 </div>
                 <div className="info-item">
-                  <span className="info-label">Категория:</span>
-                  <span className="info-value">{plant.categoryName}</span>
+                  <span className="info-label">Category: </span>
+                  <span className="info-value">{plant.categoryName || 'N/A'}</span>
                 </div>
               </div>
             </div>
 
             <div className="info-section">
-              <h3 className="info-title">📝 Описание</h3>
-              <p className="description-text">{plant.description}</p>
+              <h3 className="info-title">Description</h3>
+              <p className="description-text">{plant.description || 'No description available.'}</p>
             </div>
 
-            <div className="info-section">
-              <h3 className="info-title">🌱 Уход</h3>
-              <div className="care-grid">
-                <div className="care-item">
-                  <span className="care-label">💧 Полив:</span>
-                  <span className="care-value">{plant.care.watering}</span>
-                </div>
-                <div className="care-item">
-                  <span className="care-label">☀️ Свет:</span>
-                  <span className="care-value">{plant.care.light}</span>
-                </div>
-                <div className="care-item">
-                  <span className="care-label">🌡️ Температура:</span>
-                  <span className="care-value">{plant.care.temperature}</span>
-                </div>
-                <div className="care-item">
-                  <span className="care-label">💨 Влажность:</span>
-                  <span className="care-value">{plant.care.humidity}</span>
-                </div>
-              </div>
-            </div>
-
-            {plant.features && plant.features.length > 0 && (
+            {plant.care && (
               <div className="info-section">
-                <h3 className="info-title">✨ Особенности</h3>
+                <h3 className="info-title">Care</h3>
+                <div className="care-grid">
+                  <div className="care-item">
+                    <span className="care-label">Watering: </span>
+                    <span className="care-value">{plant.care.watering || 'N/A'}</span>
+                  </div>
+                  <div className="care-item">
+                    <span className="care-label">Light: </span>
+                    <span className="care-value">{plant.care.light || 'N/A'}</span>
+                  </div>
+                  <div className="care-item">
+                    <span className="care-label">Temperature: </span>
+                    <span className="care-value">{plant.care.temperature || 'N/A'}</span>
+                  </div>
+                  <div className="care-item">
+                    <span className="care-label">Humidity: </span>
+                    <span className="care-value">{plant.care.humidity || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {features.length > 0 && (
+              <div className="info-section">
+                <h3 className="info-title">Features</h3>
                 <ul className="features-list">
-                  {plant.features.map((feature: string, index: number) => (
+                  {features.map((feature, index) => (
                     <li key={index} className="feature-item">
-                      <span className="checkmark">✓</span>
                       {feature}
                     </li>
                   ))}
@@ -102,11 +117,11 @@ const PlantModal: React.FC<PlantModalProps> = ({ plant, onClose }) => {
               </div>
             )}
 
-            {plant.dangers && plant.dangers.length > 0 && (
-              <div className="info-section">
-                <h3 className="info-title danger-title">⚠️ Опасность</h3>
+            {dangers.length > 0 && (
+              <div className="info-section danger-section">
+                <h3 className="info-title danger-title">Dangers</h3>
                 <ul className="danger-list">
-                  {plant.dangers.map((danger: string, index: number) => (
+                  {dangers.map((danger, index) => (
                     <li key={index} className="danger-item">
                       {danger}
                     </li>
@@ -117,7 +132,7 @@ const PlantModal: React.FC<PlantModalProps> = ({ plant, onClose }) => {
 
             {plant.maintenance && (
               <div className="info-section">
-                <h3 className="info-title">🔧 Обслуживание</h3>
+                <h3 className="info-title">Maintenance</h3>
                 <p className="maintenance-text">{plant.maintenance}</p>
               </div>
             )}
