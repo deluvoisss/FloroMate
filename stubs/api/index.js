@@ -19,6 +19,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const app = express();
 const PORT = 3001;
 
+
 // Переменные из .env
 const API_KEY = process.env.API_KEY;
 const PROXY_SERVER = process.env.PROXY_SERVER;
@@ -99,6 +100,9 @@ app.use(cors({
 }));
 
 app.use(express.json());
+const staticPath = path.join(__dirname, '../../public');
+console.log('📂 Статика раздается из:', staticPath);
+app.use(express.static(staticPath));
 
 // Multer конфигурация
 const storage = multer.memoryStorage();
@@ -425,6 +429,13 @@ app.post('/api/auth/login', async (req, res) => {
 // ========================
 // PLANT DATABASE ROUTES
 // ========================
+app.post('/api/plants/recognize', async (req, res) => {
+  try {
+    const {
+      scientificName, name, image, color, habitat, size, category,
+      categoryName, description, watering, light, temperature,
+      humidity, features, dangers, maintenance, genus, family, confidence
+    } = req.body;
 
 // GET /api/plants
 app.get('/api/plants', async (req, res) => {

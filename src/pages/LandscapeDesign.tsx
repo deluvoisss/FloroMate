@@ -1,7 +1,7 @@
 import React from 'react';
 
 function LandscapeDesign() {
-  return <div>Создание ландшафтного дизайна</div>;
+  return <div>Ландшафтный дизайн</div>;
 }
 
 export default LandscapeDesign;
