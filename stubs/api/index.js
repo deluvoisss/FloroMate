@@ -19,7 +19,6 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const app = express();
 const PORT = 3001;
 
-
 // Переменные из .env
 const API_KEY = process.env.API_KEY;
 const PROXY_SERVER = process.env.PROXY_SERVER;
@@ -100,9 +99,10 @@ app.use(cors({
 }));
 
 app.use(express.json());
-const staticPath = path.join(__dirname, '../../public');
-console.log('📂 Статика раздается из:', staticPath);
-app.use(express.static(staticPath));
+
+app.use(express.static(path.join(__dirname, '../../public')));
+app.use('/images3D', express.static(path.join(__dirname, '../../public/images3D')));
+app.use('/treeModels', express.static(path.join(__dirname, '../../public/treeModels')));
 
 // Multer конфигурация
 const storage = multer.memoryStorage();
@@ -429,13 +429,6 @@ app.post('/api/auth/login', async (req, res) => {
 // ========================
 // PLANT DATABASE ROUTES
 // ========================
-app.post('/api/plants/recognize', async (req, res) => {
-  try {
-    const {
-      scientificName, name, image, color, habitat, size, category,
-      categoryName, description, watering, light, temperature,
-      humidity, features, dangers, maintenance, genus, family, confidence
-    } = req.body;
 
 // GET /api/plants
 app.get('/api/plants', async (req, res) => {
@@ -1029,6 +1022,45 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
   }
 });
 
+
+// ========================
+// DEBUG: QUICK TEST USER
+// ========================
+app.post('/api/debug/create-test-user', async (req, res) => {
+  try {
+    const passwordHash = await bcrypt.hash('test123', 10);
+    
+    const result = await pool.query(
+      `INSERT INTO users (first_name, last_name, phone, username, password_hash)
+       VALUES ('Test', 'User', '+79999999999', 'testuser', $1)
+       RETURNING id, username, first_name`,
+      [passwordHash]
+    );
+    
+    console.log('✅ Test user created');
+    res.json({
+      success: true,
+      credentials: {
+        username: 'testuser',
+        password: 'test123'
+      }
+    });
+    
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.json({
+        message: 'User already exists',
+        credentials: {
+          username: 'testuser',
+          password: 'test123'
+        }
+      });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // Запуск сервера
 app.listen(PORT, () => {
   console.log(`🌿 FloroMate API запущен: http://localhost:${PORT}`);
@@ -1049,4 +1081,18 @@ app.listen(PORT, () => {
   console.log('  POST /api/plants/enrich - обогащение данных растения');
   console.log('  POST /api/disease-detect - определение болезней растений');
   console.log('  GET /api/health - проверка состояния API');
+}); 
+
+// 🔍 ДЕБАГ
+app.get('/api/debug/models-check', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const modelsPath = path.join(__dirname, '../../public/treeModels');
+  
+  if (!fs.existsSync(modelsPath)) {
+    return res.json({ error: 'Папка не существует', path: modelsPath });
+  }
+  
+  const files = fs.readdirSync(modelsPath);
+  res.json({ success: true, count: files.length, files });
 });
