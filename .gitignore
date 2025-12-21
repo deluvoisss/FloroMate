@@ -147,3 +147,17 @@ dist/
 # Temporary files
 tmp/
 temp/
+
+# Personal development settings (не коммитится)
+# Добавьте здесь свои локальные файлы конфигурации для разработки
+# Например: .env.local.dev, auth.disabled, etc.
+*.local.dev
+auth.disabled
+.devconfig
+
+# Флаг отключения проверок авторизации (для локальной разработки)
+# NOTE: Изменения в src/components/Header/Header.tsx и src/app.tsx 
+# по снятию ограничений авторизации не должны попадать в коммиты
+# Файлы остаются в репозитории, но функционал изменен локально
+# Чтобы вернуть ограничения - используйте git checkout для этих файлов
+# auth.restrictions.disabled
