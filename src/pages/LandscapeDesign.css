@@ -1,7 +1,7 @@
 .landscape-design-page {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 2rem;
+  min-height: calc(100vh - 70px);
+  background: #f5f7fa;
+  padding: 40px 20px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -11,15 +11,15 @@
   max-width: 1200px;
   width: 100%;
   background: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  padding: 3rem;
-  margin-top: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 40px;
+  margin-top: 0;
 }
 
 .landscape-header {
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 40px;
 }
 
 .landscape-header h1 {
@@ -30,74 +30,44 @@
 }
 
 .subtitle {
-  font-size: 1.2rem;
-  color: #718096;
-  margin-bottom: 2rem;
-}
-
-.requirements {
-  background: #f7fafc;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-top: 2rem;
-  text-align: left;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.requirements-title {
-  font-weight: 600;
-  color: #2d3748;
-  margin-bottom: 1rem;
   font-size: 1.1rem;
-}
-
-.requirements-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.requirements-list li {
-  padding: 0.5rem 0;
-  color: #4a5568;
-  position: relative;
-  padding-left: 1.5rem;
-}
-
-.requirements-list li:before {
-  content: "✓";
-  position: absolute;
-  left: 0;
-  color: #48bb78;
-  font-weight: bold;
+  color: #718096;
+  margin-bottom: 0;
+  line-height: 1.6;
 }
 
 .landscape-form {
-  margin-bottom: 3rem;
+  margin-bottom: 40px;
+}
+
+.section-label {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 12px;
 }
 
 .upload-section {
-  margin-bottom: 2rem;
+  margin-bottom: 30px;
 }
 
 .dropzone {
-  border: 3px dashed #cbd5e0;
-  border-radius: 16px;
-  padding: 3rem;
+  border: 2px dashed #cbd5e0;
+  border-radius: 12px;
+  padding: 40px 20px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
   background: #f7fafc;
-  min-height: 300px;
+  min-height: 250px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .dropzone:hover {
-  border-color: #667eea;
+  border-color: #93A267;
   background: #edf2f7;
 }
 
@@ -106,12 +76,12 @@
 }
 
 .dropzone-icon {
-  font-size: 4rem;
+  font-size: 3.5rem;
   margin-bottom: 1rem;
 }
 
 .dropzone-text {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   color: #4a5568;
   margin-bottom: 0.5rem;
   font-weight: 500;
@@ -162,10 +132,43 @@
   font-weight: 600;
 }
 
+.prompt-section {
+  margin-bottom: 30px;
+}
+
+.prompt-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #2d3748;
+  background: #f7fafc;
+  resize: vertical;
+  transition: all 0.3s ease;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.prompt-input:focus {
+  outline: none;
+  border-color: #93A267;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(147, 162, 103, 0.1);
+}
+
+.prompt-hint {
+  font-size: 0.875rem;
+  color: #718096;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
 .status-message {
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
+  padding: 14px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
   font-weight: 500;
   text-align: center;
 }
@@ -190,7 +193,7 @@
 
 .button-group {
   display: flex;
-  gap: 1rem;
+  gap: 16px;
   justify-content: center;
   flex-wrap: wrap;
 }
@@ -198,26 +201,31 @@
 .btn-primary,
 .btn-secondary,
 .btn-download {
-  padding: 1rem 2rem;
-  font-size: 1.1rem;
+  padding: 14px 32px;
+  font-size: 1.05rem;
   font-weight: 600;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 140px;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #CADBAD 0%, #A8C66C 100%);
+  color: #2d3728;
+  box-shadow: 0 4px 15px rgba(202, 219, 173, 0.4);
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+  box-shadow: 0 6px 20px rgba(202, 219, 173, 0.5);
+  background: linear-gradient(135deg, #D4E5B4 0%, #B8D67C 100%);
 }
 
 .btn-primary:disabled {
@@ -232,39 +240,42 @@
 
 .btn-secondary:hover:not(:disabled) {
   background: #cbd5e0;
+  transform: translateY(-2px);
 }
 
 .btn-download {
-  background: #48bb78;
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
   color: white;
   box-shadow: 0 4px 15px rgba(72, 187, 120, 0.4);
 }
 
 .btn-download:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(72, 187, 120, 0.6);
+  box-shadow: 0 6px 20px rgba(72, 187, 120, 0.5);
 }
 
 .result-section {
-  margin-top: 3rem;
-  padding-top: 3rem;
+  margin-top: 40px;
+  padding-top: 40px;
   border-top: 2px solid #e2e8f0;
   text-align: center;
+  scroll-margin-top: 20px;
 }
 
 .result-section h2 {
   font-size: 2rem;
   color: #2d3748;
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
+  font-weight: 700;
 }
 
 .result-image-container {
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   background: #f7fafc;
-  padding: 1rem;
+  padding: 16px;
 }
 
 .result-image {
@@ -278,36 +289,354 @@
 .result-actions {
   display: flex;
   justify-content: center;
-  gap: 1rem;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 768px) {
+/* Toast уведомление */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  max-width: 600px;
+  width: calc(100% - 40px);
+  z-index: 1000;
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  pointer-events: none;
+}
+
+.toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: all;
+}
+
+.toast-hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(100px);
+  pointer-events: none;
+}
+
+.toast-content {
+  background: linear-gradient(135deg, #fff5e6 0%, #ffe8cc 100%);
+  border: 2px solid #f6ad55;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  position: relative;
+}
+
+.toast-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.toast-message {
+  flex: 1;
+  color: #744210;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: #744210;
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.toast-close:hover {
+  opacity: 1;
+  background: rgba(116, 66, 16, 0.1);
+  transform: scale(1.1);
+}
+
+/* Планшеты (768px - 1024px) */
+@media (max-width: 1024px) {
   .landscape-container {
-    padding: 1.5rem;
-    margin-top: 1rem;
+    padding: 32px 28px;
   }
 
   .landscape-header h1 {
-    font-size: 2rem;
+    font-size: 2.2rem;
   }
 
   .dropzone {
-    padding: 2rem 1rem;
-    min-height: 250px;
+    padding: 35px 18px;
+    min-height: 220px;
+  }
+
+  .result-section h2 {
+    font-size: 1.8rem;
+  }
+}
+
+/* Мобильные устройства (до 768px) */
+@media (max-width: 768px) {
+  .landscape-design-page {
+    padding: 20px 10px;
+  }
+
+  .landscape-container {
+    padding: 24px 20px;
+    border-radius: 12px;
+  }
+
+  .landscape-header {
+    margin-bottom: 30px;
+  }
+
+  .landscape-header h1 {
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .subtitle {
+    font-size: 0.95rem;
+    padding: 0 10px;
+  }
+
+  .landscape-form {
+    margin-bottom: 30px;
+  }
+
+  .section-label {
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+  }
+
+  .upload-section {
+    margin-bottom: 24px;
+  }
+
+  .dropzone {
+    padding: 24px 16px;
+    min-height: 180px;
+    border-radius: 10px;
   }
 
   .dropzone-icon {
-    font-size: 3rem;
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .dropzone-text {
+    font-size: 1rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .dropzone-hint {
+    font-size: 0.85rem;
+  }
+
+  .preview-image {
+    max-height: 300px;
+  }
+
+  .prompt-section {
+    margin-bottom: 24px;
+  }
+
+  .prompt-input {
+    padding: 12px 14px;
+    font-size: 0.95rem;
+    border-radius: 10px;
+  }
+
+  .prompt-hint {
+    font-size: 0.8rem;
+    margin-top: 6px;
+  }
+
+  .status-message {
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
   }
 
   .button-group {
     flex-direction: column;
+    gap: 12px;
   }
 
   .btn-primary,
   .btn-secondary,
   .btn-download {
     width: 100%;
+    padding: 12px 24px;
+    font-size: 1rem;
+    min-width: auto;
+  }
+
+  .result-section {
+    margin-top: 30px;
+    padding-top: 30px;
+  }
+
+  .result-section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+  }
+
+  .result-image-container {
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+  }
+
+  .result-image {
+    max-height: 400px;
+    border-radius: 10px;
+  }
+
+  .result-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .btn-download {
+    width: 100%;
+  }
+
+  .toast {
+    bottom: 20px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-width: none;
+    transform: translateY(100px);
+  }
+
+  .toast-visible {
+    transform: translateY(0);
+  }
+
+  .toast-hidden {
+    transform: translateY(100px);
+  }
+
+  .toast-content {
+    padding: 14px 16px;
+    border-radius: 12px;
+  }
+
+  .toast-message {
+    font-size: 0.875rem;
+  }
+
+  .toast-icon {
+    font-size: 1.3rem;
   }
 }
 
+/* Маленькие мобильные устройства (до 480px) */
+@media (max-width: 480px) {
+  .landscape-design-page {
+    padding: 16px 8px;
+  }
+
+  .landscape-container {
+    padding: 20px 16px;
+  }
+
+  .landscape-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .subtitle {
+    font-size: 0.875rem;
+  }
+
+  .dropzone {
+    padding: 20px 12px;
+    min-height: 160px;
+  }
+
+  .dropzone-icon {
+    font-size: 2rem;
+  }
+
+  .dropzone-text {
+    font-size: 0.9rem;
+  }
+
+  .dropzone-hint {
+    font-size: 0.8rem;
+  }
+
+  .preview-image {
+    max-height: 250px;
+  }
+
+  .prompt-input {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-download {
+    padding: 10px 20px;
+    font-size: 0.95rem;
+  }
+
+  .result-section h2 {
+    font-size: 1.3rem;
+  }
+
+  .result-image {
+    max-height: 300px;
+  }
+
+  .toast {
+    bottom: 16px;
+    left: 8px;
+    right: 8px;
+  }
+
+  .toast-content {
+    padding: 12px 14px;
+  }
+
+  .toast-message {
+    font-size: 0.8rem;
+  }
+}
+
+/* Очень маленькие экраны (до 360px) */
+@media (max-width: 360px) {
+  .landscape-container {
+    padding: 16px 12px;
+  }
+
+  .landscape-header h1 {
+    font-size: 1.3rem;
+  }
+
+  .dropzone {
+    min-height: 140px;
+  }
+
+  .result-section h2 {
+    font-size: 1.2rem;
+  }
+}
