@@ -11,8 +11,9 @@ const https = require('https');
 const { v4: uuidv4 } = require('uuid');
 const dotenv = require('dotenv');
 const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 
-// Загружаем .env
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const app = express();
@@ -29,26 +30,14 @@ const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/fl
 const PLANT_ID_API_KEY = process.env.PLANT_ID_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Проверка GROQ_API_KEY
+// Проверка обязательных переменных
 if (!GROQ_API_KEY) {
   console.error('❌ Ошибка: GROQ_API_KEY не найден в .env');
   process.exit(1);
 }
+
 console.log('✅ GROQ_API_KEY загружен');
 
-// PostgreSQL Pool
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
-
-pool.on('error', (err) => {
-  console.error('❌ Unexpected error on idle PostgreSQL client', err);
-});
-
-// Проверка переменных окружения
 if (!API_KEY) {
   console.error('❌ Ошибка: API_KEY не найден в .env');
   process.exit(1);
@@ -69,6 +58,27 @@ if (PROXY_SERVER) {
 if (!GIGACHAT_AUTH_KEY2) {
   console.warn('⚠️ GIGACHAT_AUTH_KEY2 не найден в .env — раздел ландшафтного дизайна работать не будет');
 }
+// PostgreSQL Pool
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+pool.on('error', (err) => {
+  console.error('❌ Unexpected error on idle PostgreSQL client', err);
+});
+
+// ========================
+// STORAGE
+// ========================
+const verificationCodes = new Map();
+
+// ========================
+// ЗАГЛУШКА: КОД ТОЛЬКО В КОНСОЛЬ
+// ========================
+console.log('📝 Режим разработки: коды выводятся только в консоль');
 
 // Безопасные заголовки
 app.use((req, res, next) => {
@@ -94,6 +104,10 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+app.use(express.static(path.join(__dirname, '../../public')));
+app.use('/images3D', express.static(path.join(__dirname, '../../public/images3D')));
+app.use('/treeModels', express.static(path.join(__dirname, '../../public/treeModels')));
 
 // Multer конфигурация
 const storage = multer.memoryStorage();
@@ -139,6 +153,285 @@ function formatPlantForFrontend(row) {
 }
 
 // ========================
+// AUTHENTICATION ROUTES
+// ========================
+
+// Инициализация таблицы users
+app.post('/api/auth/init-db', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        phone VARCHAR(20) UNIQUE NOT NULL,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+      CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+    `);
+    console.log('✅ Таблица users создана');
+    res.json({ message: 'Database initialized successfully' });
+  } catch (error) {
+    console.error('❌ Ошибка создания таблицы:', error);
+    res.status(500).json({ error: 'Database initialization failed' });
+  }
+});
+
+// Проверка доступности username
+app.get('/api/auth/check-username', async (req, res) => {
+  try {
+    const { username } = req.query;
+    if (!username || username.length < 3) {
+      return res.status(400).json({
+        available: false,
+        error: 'Username too short'
+      });
+    }
+
+    const result = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [username]
+    );
+
+    const available = result.rows.length === 0;
+    console.log(`🔍 Проверка username "${username}": ${available ? 'доступен' : 'занят'}`);
+    res.json({ available });
+  } catch (error) {
+    console.error('❌ Ошибка проверки username:', error);
+    res.status(500).json({ available: false, error: 'Internal server error' });
+  }
+});
+
+// Отправка кода верификации
+app.post('/api/auth/send-verification', async (req, res) => {
+  try {
+    const { phone, isPasswordReset } = req.body;
+    
+    if (!phone) {
+      return res.status(400).json({ error: 'Номер телефона обязателен' });
+    }
+
+    // Проверяем существование пользователя
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE phone = $1',
+      [phone]
+    );
+
+    if (!isPasswordReset && existingUser.rows.length > 0) {
+      return res.status(400).json({
+        error: 'Пользователь с таким телефоном уже существует'
+      });
+    }
+
+    if (isPasswordReset && existingUser.rows.length === 0) {
+      return res.status(400).json({
+        error: 'Пользователь с таким телефоном не найден'
+      });
+    }
+
+    // Генерируем 6-значный код
+    const code = crypto.randomInt(100000, 999999).toString();
+    
+    // Сохраняем код
+    verificationCodes.set(phone, {
+      code,
+      expires: Date.now() + 5 * 60 * 1000,
+      isPasswordReset: isPasswordReset || false
+    });
+
+    // ✅ ТОЛЬКО КОНСОЛЬ
+    console.log('\n' + '='.repeat(50));
+    console.log(`📱 КОД ВЕРИФИКАЦИИ ДЛЯ: ${phone}`);
+    console.log(`🔢 КОД: ${code}`);
+    console.log(`⏰ Действителен до: ${new Date(Date.now() + 5 * 60 * 1000).toLocaleTimeString()}`);
+    console.log(`📋 Тип: ${isPasswordReset ? 'Сброс пароля' : 'Регистрация'}`);
+    console.log('='.repeat(50) + '\n');
+
+    res.json({ 
+      success: true, 
+      message: 'Код сгенерирован (проверь консоль сервера)',
+      code: code // Отправляем код на фронт для удобства
+    });
+  } catch (error) {
+    console.error('❌ Ошибка отправки кода:', error);
+    res.status(500).json({ error: 'Не удалось отправить код' });
+  }
+});
+
+// Проверка кода и регистрация пользователя
+app.post('/api/auth/verify-code', async (req, res) => {
+  try {
+    const { phone, code, userData } = req.body;
+    
+    if (!phone || !code || !userData) {
+      return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
+    }
+
+    // Проверяем код верификации
+    const storedData = verificationCodes.get(phone);
+    if (!storedData) {
+      return res.status(400).json({ error: 'Код не найден или истёк срок действия' });
+    }
+
+    if (Date.now() > storedData.expires) {
+      verificationCodes.delete(phone);
+      return res.status(400).json({ error: 'Срок действия кода истёк' });
+    }
+
+    if (storedData.code !== code) {
+      return res.status(400).json({ error: 'Неверный код' });
+    }
+
+    // Код верный, создаём пользователя
+    const passwordHash = await bcrypt.hash(userData.password, 10);
+    const result = await pool.query(
+      `INSERT INTO users (first_name, last_name, phone, username, password_hash)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, first_name, last_name, username, phone, created_at`,
+      [userData.firstName, userData.lastName, phone, userData.username, passwordHash]
+    );
+
+    // Удаляем использованный код
+    verificationCodes.delete(phone);
+
+    const user = result.rows[0];
+    console.log(`✅ Пользователь зарегистрирован: ${user.username}`);
+    
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        username: user.username,
+        phone: user.phone
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ошибка верификации:', error);
+    if (error.code === '23505') {
+      return res.status(400).json({
+        error: 'Имя пользователя или телефон уже используется'
+      });
+    }
+    res.status(500).json({ error: 'Ошибка регистрации' });
+  }
+});
+
+// Сброс пароля
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { phone, code, newPassword } = req.body;
+    
+    if (!phone || !code || !newPassword) {
+      return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
+    }
+
+    // Проверяем код
+    const storedData = verificationCodes.get(phone);
+    if (!storedData || !storedData.isPasswordReset) {
+      return res.status(400).json({ error: 'Неверный код или код не для сброса пароля' });
+    }
+
+    if (Date.now() > storedData.expires) {
+      verificationCodes.delete(phone);
+      return res.status(400).json({ error: 'Срок действия кода истёк' });
+    }
+
+    if (storedData.code !== code) {
+      return res.status(400).json({ error: 'Неверный код' });
+    }
+
+    // Обновляем пароль
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const result = await pool.query(
+      `UPDATE users SET password_hash = $1 WHERE phone = $2
+       RETURNING id, first_name, last_name, username, phone`,
+      [passwordHash, phone]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+
+    // Удаляем использованный код
+    verificationCodes.delete(phone);
+
+    const user = result.rows[0];
+    console.log(`✅ Пароль изменен для: ${user.username}`);
+    
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        username: user.username,
+        phone: user.phone
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ошибка сброса пароля:', error);
+    res.status(500).json({ error: 'Ошибка сброса пароля' });
+  }
+});
+
+// Вход в систему
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Требуется имя пользователя и пароль' });
+    }
+
+    // Ищем пользователя
+    const result = await pool.query(
+      'SELECT * FROM users WHERE username = $1',
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
+    }
+
+    const user = result.rows[0];
+
+    // Проверяем пароль
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
+    }
+
+    // Обновляем время последнего входа
+    await pool.query(
+      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
+      [user.id]
+    );
+
+    console.log(`✅ Вход выполнен: ${user.username}`);
+    
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        username: user.username,
+        phone: user.phone
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ошибка входа:', error);
+    res.status(500).json({ error: 'Ошибка входа в систему' });
+  }
+});
+
+// ========================
 // PLANT DATABASE ROUTES
 // ========================
 
@@ -146,7 +439,6 @@ function formatPlantForFrontend(row) {
 app.get('/api/plants', async (req, res) => {
   try {
     const { colors, habitats, sizes, page = 1, limit = 12 } = req.query;
-
     let query = 'SELECT * FROM plants WHERE 1=1';
     const params = [];
     let paramIndex = 1;
@@ -226,9 +518,7 @@ app.get('/api/plants/search', async (req, res) => {
   }
 });
 
-// ========================
-// PLANT RECOGNIZE (ПОЛНОЕ СОХРАНЕНИЕ)
-// ========================
+// POST /api/plants/recognize
 app.post('/api/plants/recognize', async (req, res) => {
   try {
     const {
@@ -241,7 +531,6 @@ app.post('/api/plants/recognize', async (req, res) => {
       return res.status(400).json({ error: 'Scientific name required' });
     }
 
-    // Проверяем существование
     const existing = await pool.query(
       'SELECT * FROM plants WHERE scientific_name = $1',
       [scientificName]
@@ -284,21 +573,19 @@ app.post('/api/plants/recognize', async (req, res) => {
       light,
       temperature,
       humidity,
-      features && Array.isArray(features) ? JSON.stringify(features) : null, // ✅
+      features && Array.isArray(features) ? JSON.stringify(features) : null,
       dangers,
       maintenance,
       genus,
       family,
       confidence || 0.95
     ];
-    
 
     const result = await pool.query(query, values);
-
     console.log(`✅ FULL Plant added: ${scientificName}`);
 
     res.status(201).json({
-      message: 'Plant fully added with GigaChat data',
+      message: 'Plant fully added',
       plant: formatPlantForFrontend(result.rows[0]),
       isNew: true
     });
@@ -317,17 +604,14 @@ async function identifyPlant(images) {
     images.forEach((img, idx) => {
       let ext = mime.extension(img.mimetype) || 'jpg';
       let normalizedExt = ext === 'jpeg' ? 'jpg' : ext;
-
       form.append('images', img.buffer, {
         filename: `plant${idx}.${normalizedExt}`,
         contentType: img.mimetype
       });
-
       form.append('organs', img.organ);
     });
 
     console.log('🚀 Отправляем запрос к PlantNet API...');
-
     const axiosConfig = {
       headers: form.getHeaders(),
       maxBodyLength: Infinity,
@@ -367,7 +651,6 @@ app.post('/api/identify', upload.fields([
     }
 
     const images = [];
-
     if (req.files['flower']?.[0]) {
       images.push({
         buffer: req.files['flower'][0].buffer,
@@ -396,7 +679,7 @@ app.post('/api/identify', upload.fields([
 });
 
 // ========================
-// GIGACHAT ROUTES
+// GIGACHAT & GROQ ROUTES
 // ========================
 let cachedToken = null;
 let tokenExpiry = null;
@@ -479,13 +762,11 @@ async function getLandscapeAccessToken() {
 async function translatePlantWithGroq(scientificName) {
   try {
     console.log(`🤖 Groq обрабатывает: ${scientificName}`);
-    
     const prompt = `Ты ботаник. Для растения "${scientificName}" верни ТОЛЬКО JSON:
 {
   "name": "Полное русское название растения (например: Тюльпан Геснера, Роза садовая)",
   "commonName": "Народное название"
 }
-
 ВАЖНО: "name" должно быть ПОЛНЫМ названием с видом, не общим словом!`;
 
     const axiosConfig = {
@@ -524,18 +805,16 @@ async function translatePlantWithGroq(scientificName) {
 
     const content = response.data.choices[0].message.content.trim();
     let jsonContent = content.replace(/``````\n?/g, '');
-    
     const plantData = JSON.parse(jsonContent);
+
     console.log(`✅ Groq перевел: ${plantData.name}`);
-    
     return plantData;
   } catch (error) {
     console.error('❌ Ошибка Groq:', error.message);
-    return null; // Возвращаем null вместо ошибки
+    return null;
   }
 }
 
-// Чат с Гигачатом (у тебя уже работал)
 app.post('/api/chat', async (req, res) => {
   try {
     console.log('💬 Получен запрос на чат');
@@ -546,7 +825,6 @@ app.post('/api/chat', async (req, res) => {
     }
 
     const accessToken = await getAccessToken();
-
     const systemMessage = {
       role: 'system',
       content: 'Ты - эксперт по растениям и садоводству. Отвечай полезно на вопросы о растениях в двух трех предложениях, их уходе, болезнях и выращивании. Используй эмодзи растений 🌱🌿🌸. Не отвечай на вопросы несвязанные с растениями'
@@ -582,20 +860,17 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Обогащение карточки растения через GigaChat
-// Обогащение карточки растения через Groq
 app.post('/api/plants/enrich', async (req, res) => {
   try {
     const { scientificName } = req.body;
-    
+
     if (!scientificName) {
       return res.status(400).json({ error: 'scientificName required' });
     }
 
     console.log(`🧠 Groq enrich: ${scientificName}`);
-    
     const groqData = await translatePlantWithGroq(scientificName);
-    
+
     res.json({
       scientificName,
       enriched: true,
@@ -610,7 +885,6 @@ app.post('/api/plants/enrich', async (req, res) => {
   }
 });
 
-
 // ========================
 // HEALTH CHECK
 // ========================
@@ -620,24 +894,21 @@ app.get('/api/health', (req, res) => {
     services: {
       plantnet: 'ready',
       gigachat: 'ready',
-      database: DATABASE_URL ? 'connected' : 'not configured'
+      database: DATABASE_URL ? 'connected' : 'not configured',
+      authentication: 'ready'
     }
   });
 });
 
 // ========================
-// PLANT.ID HEALTH ASSESSMENT (DISEASE DETECTION)
+// PLANT.ID DISEASE DETECTION
 // ========================
-
 if (!PLANT_ID_API_KEY) {
   console.warn('⚠️ PLANT_ID_API_KEY не найден в .env');
 } else {
   console.log('✅ PLANT_ID_API_KEY загружен');
 }
 
-// ========================
-// PLANT.ID HEALTH ASSESSMENT (DISEASE DETECTION) - ПОЛНОСТЬЮ НА РУССКОМ
-// ========================
 const diseaseTranslations = {
   'rust': 'Ржавчина',
   'fungi': 'Грибки',
@@ -671,38 +942,30 @@ const diseaseTranslations = {
   'frost damage': 'Повреждение морозом'
 };
 
-// Функция перевода названия болезни (ИСПРАВЛЕННАЯ)
 function translateDiseaseName(englishName) {
-  // Проверяем, что это строка
   if (!englishName || typeof englishName !== 'string') {
     return 'Неизвестная проблема';
   }
-  
+
   const lowerName = englishName.toLowerCase().trim();
-  
-  // Точное совпадение
+
   if (diseaseTranslations[lowerName]) {
     return diseaseTranslations[lowerName];
   }
-  
-  // Частичное совпадение
+
   for (const [eng, rus] of Object.entries(diseaseTranslations)) {
     if (lowerName.includes(eng)) {
       return rus;
     }
   }
-  
-  // Если перевод не найден, возвращаем оригинал
+
   return englishName;
 }
 
-// ========================
-// PLANT.ID HEALTH ASSESSMENT - ПОЛНОСТЬЮ НА РУССКОМ
-// ========================
 app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
   try {
     console.log('🦠 Получен запрос на определение болезни растения');
-    
+
     if (!req.file) {
       return res.status(400).json({ error: 'Загрузите изображение' });
     }
@@ -712,7 +975,6 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
     }
 
     const base64Image = req.file.buffer.toString('base64');
-    
     console.log('🚀 Отправляем запрос к Plant.id Health Assessment API...');
 
     const requestBody = {
@@ -757,16 +1019,14 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
     console.log('Здоровое растение:', isHealthy);
     console.log('Найдено болезней:', diseaseSuggestions.length);
 
-    // Форматируем ответ с РУССКИМИ названиями
     const formattedResponse = {
       is_healthy: isHealthy,
       is_healthy_probability: isHealthyProb,
       diseases: diseaseSuggestions.map(disease => {
-        // Пытаемся получить русское название из API или переводим сами
         const apiRussianName = disease.details?.common_names?.[0];
         const translatedName = translateDiseaseName(disease.name);
         const russianName = apiRussianName || translatedName;
-        
+
         return {
           name: russianName,
           scientific_name: disease.name || '',
@@ -784,7 +1044,7 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
         const apiRussianName = topDisease.details?.common_names?.[0];
         const translatedName = translateDiseaseName(topDisease.name);
         const russianName = apiRussianName || translatedName;
-        
+
         return {
           disease_name: russianName,
           scientific_name: topDisease.name || '',
@@ -799,7 +1059,6 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
     };
 
     res.json(formattedResponse);
-
   } catch (error) {
     console.error('❌ Ошибка Plant.id:', error.response?.status, error.message);
     console.error('Детали ошибки:', error.response?.data);
@@ -1244,6 +1503,44 @@ app.post('/api/landscape/generate', upload.single('image'), async (req, res) => 
   }
 });
 
+// ========================
+// DEBUG: QUICK TEST USER
+// ========================
+app.post('/api/debug/create-test-user', async (req, res) => {
+  try {
+    const passwordHash = await bcrypt.hash('test123', 10);
+    
+    const result = await pool.query(
+      `INSERT INTO users (first_name, last_name, phone, username, password_hash)
+       VALUES ('Test', 'User', '+79999999999', 'testuser', $1)
+       RETURNING id, username, first_name`,
+      [passwordHash]
+    );
+    
+    console.log('✅ Test user created');
+    res.json({
+      success: true,
+      credentials: {
+        username: 'testuser',
+        password: 'test123'
+      }
+    });
+    
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.json({
+        message: 'User already exists',
+        credentials: {
+          username: 'testuser',
+          password: 'test123'
+        }
+      });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // Запуск сервера
 app.listen(PORT, () => {
   console.log(`🌿 FloroMate API запущен: http://localhost:${PORT}`);
@@ -1257,4 +1554,34 @@ app.listen(PORT, () => {
   console.log('GET /api/plants/photo - фото растения (Perenual)');
   console.log('POST /api/landscape/generate - генерация дизайна ландшафта');
   console.log('GET /api/health - проверка состояния API');
+  console.log('🔐 Authentication endpoints:');
+  console.log('  POST /api/auth/init-db - инициализация БД');
+  console.log('  GET /api/auth/check-username - проверка username');
+  console.log('  POST /api/auth/send-verification - отправка кода');
+  console.log('  POST /api/auth/verify-code - верификация и регистрация');
+  console.log('  POST /api/auth/reset-password - сброс пароля');
+  console.log('  POST /api/auth/login - вход в систему');
+  console.log('🌱 Plant endpoints:');
+  console.log('  POST /api/identify - распознавание растений');
+  console.log('  POST /api/chat - AI чат');
+  console.log('  GET /api/plants - список растений');
+  console.log('  GET /api/plants/search?query=... - поиск растений');
+  console.log('  POST /api/plants/recognize - сохранить распознанное растение');
+  console.log('  POST /api/plants/enrich - обогащение данных растения');
+  console.log('  POST /api/disease-detect - определение болезней растений');
+  console.log('  GET /api/health - проверка состояния API');
+}); 
+
+// 🔍 ДЕБАГ
+app.get('/api/debug/models-check', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const modelsPath = path.join(__dirname, '../../public/treeModels');
+  
+  if (!fs.existsSync(modelsPath)) {
+    return res.json({ error: 'Папка не существует', path: modelsPath });
+  }
+  
+  const files = fs.readdirSync(modelsPath);
+  res.json({ success: true, count: files.length, files });
 });
