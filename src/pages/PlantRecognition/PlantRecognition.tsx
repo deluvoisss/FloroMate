@@ -1,5 +1,6 @@
 import React, { useState, ChangeEvent, FormEvent, useRef } from 'react';
 import './PlantRecognition.css';
+import { addRecognizedPlant } from '../Encyclopedia/plantApi';
 
 interface PlantResult {
   species?: {
@@ -142,7 +143,32 @@ const PlantRecognition: React.FC = () => {
         
         setResults(translatedResults);
         setBestMatch(translatedResults[0]);
-        setStatus({ message: '✅ Растение определено!', type: 'success' });
+        setStatus({ message: '✅ Растение определено! Сохраняем в базу данных...', type: 'info' });
+        
+        // Шаг 3: Сохраняем лучшее совпадение в базу данных
+        const bestResult = translatedResults[0];
+        const scientificName = bestResult.species?.scientificNameWithoutAuthor || 
+                              bestResult.genus?.scientificNameWithoutAuthor;
+        
+        if (scientificName && scientificName !== 'Unknown') {
+          try {
+            await addRecognizedPlant({
+              scientificName: scientificName,
+              genus: bestResult.genus?.scientificNameWithoutAuthor,
+              family: bestResult.family?.scientificNameWithoutAuthor,
+              confidence: bestResult.score
+            });
+            setStatus({ message: '✅ Растение определено и добавлено в энциклопедию!', type: 'success' });
+          } catch (saveError) {
+            console.error('Ошибка при сохранении растения:', saveError);
+            setStatus({ 
+              message: '✅ Растение определено, но не удалось добавить в базу данных', 
+              type: 'error' 
+            });
+          }
+        } else {
+          setStatus({ message: '✅ Растение определено!', type: 'success' });
+        }
       } else {
         setStatus({ message: '🤔 Не удалось определить растение', type: 'info' });
       }

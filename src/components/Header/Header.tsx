@@ -119,8 +119,20 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
   };
 
   const handleProtectedClick = (e: React.MouseEvent, path: string) => {
-    navigate(path);
-    setOpenMenu(null);
+    if (!isAuthenticated) {
+      e.preventDefault();
+      handleOpenAuthModal('login');
+    } else {
+      navigate(path);
+      setOpenMenu(null);
+    }
+  };
+
+  const handleLockedItemClick = (e: React.MouseEvent) => {
+    if (!isAuthenticated) {
+      e.preventDefault();
+      handleOpenAuthModal('login');
+    }
   };
   
   const handleCloseAuthModal = () => {
@@ -150,13 +162,16 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
                 onMouseLeave={handleMenuLeave}
               >
                 <div 
-                  className={`nav-item ${isRecognitionActive ? 'active' : ''}`}
+                  className={`nav-item ${isRecognitionActive ? 'active' : ''} ${!isAuthenticated ? 'locked' : ''}`}
+                  onClick={handleLockedItemClick}
                 >
                   Узнать по фото
+                  {!isAuthenticated && <span className="lock-icon">🔒</span>}
+                  {!isAuthenticated && <div className="tooltip">Необходимо авторизоваться</div>}
                 </div>
                 
-                {/* Dropdown меню */}
-                {openMenu === 'recognition' && (
+                {/* Dropdown появляется только для авторизованных */}
+                {openMenu === 'recognition' && isAuthenticated && (
                   <div className="dropdown-menu">
                     <div 
                       onClick={(e) => handleProtectedClick(e, 'recognition1')} 
@@ -180,13 +195,16 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
                 onMouseLeave={handleMenuLeave}
               >
                 <div 
-                  className={`nav-item ${isLandscapeActive ? 'active' : ''}`}
+                  className={`nav-item ${isLandscapeActive ? 'active' : ''} ${!isAuthenticated ? 'locked' : ''}`}
+                  onClick={handleLockedItemClick}
                 >
                   Мастерская ландшафта
+                  {!isAuthenticated && <span className="lock-icon">🔒</span>}
+                  {!isAuthenticated && <div className="tooltip">Необходимо авторизоваться</div>}
                 </div>
                 
-                {/* Dropdown меню */}
-                {openMenu === 'landscape' && (
+                {/* Dropdown появляется только для авторизованных */}
+                {openMenu === 'landscape' && isAuthenticated && (
                   <div className="dropdown-menu">
                     <div 
                       onClick={(e) => handleProtectedClick(e, '/landscapedesign')} 
@@ -234,10 +252,12 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
               onMouseLeave={handleMenuLeave}
             >
               <div 
-                className={`nav-item ${location.pathname === '/privategarden' ? 'active' : ''}`}
+                className={`nav-item ${isLandscapeActive ? 'active' : ''} ${!isAuthenticated ? 'locked' : ''}`}
                 onClick={(e) => handleProtectedClick(e, '/privategarden')}
               >
                 Личный сад
+                {!isAuthenticated && <span className="lock-icon">🔒</span>}
+                {!isAuthenticated && <div className="tooltip">Необходимо авторизоваться</div>}
               </div>
             </li>
 
@@ -247,10 +267,12 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
               onMouseLeave={handleMenuLeave}
             >
               <div 
-                className={`nav-item ${location.pathname === '/subscription' ? 'active' : ''}`}
+                className={`nav-item ${isLandscapeActive ? 'active' : ''} ${!isAuthenticated ? 'locked' : ''}`}
                 onClick={(e) => handleProtectedClick(e, '/subscription')}
               >
                 Премиум-доступ
+                {!isAuthenticated && <span className="lock-icon">🔒</span>}
+                {!isAuthenticated && <div className="tooltip">Необходимо авторизоваться</div>}
               </div>
             </li>
             <li>
@@ -268,7 +290,7 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
                   <div className="dropdown-menu user-dropdown">
                     <div className="user-info">
                       <strong>{user?.username}</strong>
-                      <small>{user?.phone}</small>
+                      <small>{user?.email}</small>
                     </div>
                     <div className="dropdown-divider" />
                     <span 

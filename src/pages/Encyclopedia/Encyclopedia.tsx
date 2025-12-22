@@ -15,47 +15,50 @@ const Encyclopedia: React.FC = () => {
     habitats: [],
     sizes: []
   });
-  const [loading, setLoading] = useState<boolean>(true);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [totalPages, setTotalPages] = useState<number>(1);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [availableColors, setAvailableColors] = useState<string[]>([]); // НОВОЕ
+  const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadPlants();
-    // eslint-disable-next-line
-  }, [filters, currentPage, searchQuery]);
 
   const loadPlants = async () => {
     try {
       setLoading(true);
       setError(null);
-
+  
       if (searchQuery.trim()) {
         const searchResult = await plantApiService.searchPlants(searchQuery);
-        setPlants(searchResult);
+        console.log('🌿 SEARCH plants:', searchResult);
+        setPlants(searchResult || []);
         setTotalPages(1);
+        setAvailableColors([...new Set((searchResult || []).map((p: Plant) => p.color).filter(Boolean))]);
       } else {
         const result = await plantApiService.fetchPlants(filters, currentPage);
-        setPlants(result.plants);
-        setTotalPages(result.totalPages);
+        console.log('🌿 API plants:', result.plants);
+        console.log('🌿 Total pages:', result.totalPages);
+        setPlants(result.plants || []);
+        setTotalPages(result.totalPages || 1);
+        setAvailableColors([...new Set((result.plants || []).map((p: Plant) => p.color).filter(Boolean))]);
       }
     } catch (err) {
-      console.error('Ошибка загрузки:', err);
-      setError('Ошибка загрузки данных');
+      console.error('❌ Error loading plants:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Ошибка загрузки данных';
+      setError(`Ошибка загрузки данных: ${errorMessage}`);
       setPlants([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredPlants = plants.filter((plant: Plant) => {
-    const colorMatch = filters.colors.length === 0 || filters.colors.includes(plant.color);
-    const habitatMatch = filters.habitats.length === 0 || filters.habitats.includes(plant.habitat);
-    const sizeMatch = filters.sizes.length === 0 || filters.sizes.includes(plant.size);
-    return colorMatch && habitatMatch && sizeMatch;
-  });
+  useEffect(() => {
+    loadPlants();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, currentPage, searchQuery]);
+  
+
+  const filteredPlants = plants;
 
   const handleFilterChange = (filterType: FilterType, value: string) => {
     setFilters((prev) => {
@@ -63,7 +66,6 @@ const Encyclopedia: React.FC = () => {
       const newFilters = currentFilters.includes(value)
         ? currentFilters.filter((f: string) => f !== value)
         : [...currentFilters, value];
-
       return {
         ...prev,
         [filterType]: newFilters
@@ -93,16 +95,13 @@ const Encyclopedia: React.FC = () => {
 
   return (
     <div className="encyclopedia-page">
-      <button 
-        className="sidebar-toggle-mobile"
-        onClick={toggleSidebar}
-        aria-label={sidebarOpen ? 'Скрыть фильтры' : 'Показать фильтры'}
-      >
+      <button className="sidebar-toggle-mobile" onClick={toggleSidebar}>
         {sidebarOpen ? '✕ Скрыть' : '☰ Фильтры'}
       </button>
 
       <FilterSidebar
         filters={filters}
+        availableColors={availableColors} // ПЕРЕДАЕМ динамические цвета
         onFilterChange={handleFilterChange}
         onReset={resetFilters}
         isOpen={sidebarOpen}
@@ -111,7 +110,6 @@ const Encyclopedia: React.FC = () => {
       />
 
       <div className={`encyclopedia-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
-        
         {loading && (
           <div className="encyclopedia-loading">
             <p>⏳ Загрузка растений...</p>
@@ -121,7 +119,7 @@ const Encyclopedia: React.FC = () => {
         {error && !loading && (
           <div className="encyclopedia-error">
             <h2>❌ {error}</h2>
-            <button onClick={() => loadPlants()}>Попробовать снова</button>
+            <button onClick={loadPlants}>Попробовать снова</button>
           </div>
         )}
 
@@ -129,15 +127,14 @@ const Encyclopedia: React.FC = () => {
           <>
             <div className="results-header">
               <h2>Энциклопедия растений</h2>
-              <p>
-                Найдено: <strong>{filteredPlants.length}</strong> растений
-              </p>
-              {filteredPlants.length === 0 && (
-                <p className="no-results">
-                  🔍 Попробуйте изменить параметры фильтров
-                </p>
-              )}
+              <p>Показано на странице: <strong>{filteredPlants.length}</strong> растений</p>
             </div>
+
+            {filteredPlants.length === 0 && (
+              <p className="no-results">
+                🔍 Попробуйте изменить параметры фильтров
+              </p>
+            )}
 
             {filteredPlants.length > 0 && (
               <div className="plants-grid">
@@ -177,9 +174,9 @@ const Encyclopedia: React.FC = () => {
       </div>
 
       {selectedPlant && (
-        <PlantModal 
-          plant={selectedPlant} 
-          onClose={() => setSelectedPlant(null)} 
+        <PlantModal
+          plant={selectedPlant}
+          onClose={() => setSelectedPlant(null)}
         />
       )}
 
