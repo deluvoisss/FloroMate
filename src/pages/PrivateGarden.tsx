@@ -222,12 +222,15 @@ const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(
       setDiaryEntries((prev) => [diaryEntry, ...prev]);
 
       setAIResults({
-        analysis: data.analysis,
-        tasksCount: aiTasks.length,
-        wateringCount: aiWatering.length,
-        fertilizerCount: aiFertilizer.length,
-        details: { tasks: aiTasks, watering: aiWatering, fertilizer: aiFertilizer },
-      });
+  analysis: data.analysis,
+  tasks: aiTasks,
+  watering: aiWatering,
+  fertilizer: aiFertilizer,
+  diaryEntry: data.diaryEntry,
+  tasksCount: aiTasks.length,
+  wateringCount: aiWatering.length,
+  fertilizerCount: aiFertilizer.length,
+});
 
       setShowAIResultsModal(true);
       setShowAIModal(false);
@@ -810,38 +813,138 @@ const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(
 
       {/* РЕЗУЛЬТАТЫ AI MODAL */}
       {showAIResultsModal && (
-        <div className="modal-overlay" onClick={() => setShowAIResultsModal(false)}>
-          <div className="modal modal--results" onClick={e => e.stopPropagation()}>
-            <h2 className="modal-title">✅ Анализ от AI</h2>
-            
-            <div className="ai-analysis-box">
-              <p>{aiResults?.analysis}</p>
-            </div>
+  <div className="modal-overlay" onClick={() => setShowAIResultsModal(false)}>
+    <div 
+      className="modal ai-analysis-modal" 
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Заголовок */}
+      <h2 className="modal-title">Анализ от AI</h2>
 
-            <div className="ai-stats">
-              <div className="ai-stat">
-                <div className="ai-stat-value">{aiResults?.tasksCount || 0}</div>
-                <div className="ai-stat-label">Задач</div>
-              </div>
-              <div className="ai-stat">
-                <div className="ai-stat-value">{aiResults?.wateringCount || 0}</div>
-                <div className="ai-stat-label">Режимы полива</div>
-              </div>
-              <div className="ai-stat">
-                <div className="ai-stat-value">{aiResults?.fertilizerCount || 0}</div>
-                <div className="ai-stat-label">Удобрений</div>
-              </div>
-            </div>
+      {/* Основное содержимое */}
+      <div className="modal-body">
+        <div className="ai-analysis-content">
 
-            <button
-              onClick={() => setShowAIResultsModal(false)}
-              className="btn-primary btn-primary--full"
-            >
-              ✅ Готово
-            </button>
-          </div>
+          {/* 1. АНАЛИЗ */}
+          <section className="ai-analysis-section">
+            <h3 className="ai-analysis-section__title">
+              🔍 Анализ проблемы
+            </h3>
+            <p className="ai-analysis-section__content">
+              {aiResults?.analysis || 'Нет данных анализа'}
+            </p>
+          </section>
+
+          {/* 2. ЗАДАЧИ */}
+          {aiResults?.tasks && aiResults.tasks.length > 0 && (
+            <section className="ai-analysis-section ai-tasks-section">
+              <h3 className="ai-analysis-section__title">
+                Рекомендуемые задачи
+              </h3>
+              <div className="ai-tasks-list">
+                {aiResults.tasks.map((task: any, index: number) => (
+                  <div key={index} className="ai-task-item">
+                    <div className="ai-task-title">
+                      {task.title}
+                      {task.urgent && <span className="ai-task-urgent">Срочно!</span>}
+                    </div>
+                    {task.dueDate && (
+                      <div className="ai-task-due">
+                        До: {new Date(task.dueDate).toLocaleDateString('ru-RU')}
+                      </div>
+                    )}
+                    <div className="ai-task-description">
+                      {task.description}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 3. ПОЛИВ */}
+          {aiResults?.watering && aiResults.watering.length > 0 && (
+            <section className="ai-analysis-section ai-watering-section">
+              <h3 className="ai-analysis-section__title">
+                Режимы полива
+              </h3>
+              <div className="ai-watering-list">
+                {aiResults.watering.map((item: any, index: number) => (
+                  <div key={index} className="ai-watering-item">
+                    <div className="ai-watering-plant">{item.plant}</div>
+                    <div className="ai-watering-details">
+                      <strong>Частота:</strong> {item.frequency}<br />
+                      <strong>Объём:</strong> {item.amount}<br />
+                      {item.description}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 4. УДОБРЕНИЯ */}
+          {aiResults?.fertilizer && aiResults.fertilizer.length > 0 && (
+            <section className="ai-analysis-section ai-fertilizer-section">
+              <h3 className="ai-analysis-section__title">
+                Рекомендуемые удобрения
+              </h3>
+              <div className="ai-fertilizer-list">
+                {aiResults.fertilizer.map((item: any, index: number) => (
+                  <div key={index} className="ai-fertilizer-item">
+                    <div className="ai-fertilizer-name">
+                      {item.name}
+                      <span className="ai-fertilizer-type">{item.type}</span>
+                    </div>
+                    <div className="ai-fertilizer-details">
+                      <strong>График:</strong> {item.schedule}<br />
+                      <strong>Дозировка:</strong> {item.amount}<br />
+                      {item.description}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 5. ЗАПИСЬ В ДНЕВНИК */}
+          {aiResults?.diaryEntry && (
+            <section className="ai-analysis-section ai-diary-section">
+              <h3 className="ai-analysis-section__title">
+                Запись в дневник сада
+              </h3>
+              <div className="ai-diary-entry">
+                <div className="ai-diary-title">
+                  {aiResults.diaryEntry.title}
+                </div>
+                <div className="ai-diary-text">
+                  {aiResults.diaryEntry.text}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Если ничего нет — заглушка */}
+          {(!aiResults?.tasks?.length && !aiResults?.watering?.length && !aiResults?.fertilizer?.length && !aiResults?.diaryEntry) && (
+            <p style={{ textAlign: 'center', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+              Рекомендаций не найдено
+            </p>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* Футер с кнопкой */}
+      <div className="modal-footer">
+        <button
+          onClick={() => setShowAIResultsModal(false)}
+          className="btn-primary"
+        >
+          ✅ Готово
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ДНЕВНИК MODAL */}
      {showDiaryModal && (
