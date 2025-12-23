@@ -478,32 +478,38 @@ app.get('/api/plants', async (req, res) => {
 app.get('/api/plants/search', async (req, res) => {
   try {
     const { query } = req.query;
+
     if (!query || typeof query !== 'string') {
       return res.status(400).json({ error: 'Query parameter required' });
     }
 
-    const searchQuery = `
-      SELECT * FROM FROM public.plants
+    const searchSql = `
+      SELECT *
+      FROM public.plants
       WHERE LOWER(name) LIKE LOWER($1)
-      OR LOWER(scientific_name) LIKE LOWER($1)
-      ORDER BY
-        CASE
-          WHEN LOWER(name) = LOWER($2) THEN 1
-          WHEN LOWER(scientific_name) = LOWER($2) THEN 2
-          ELSE 3
-        END,
-        name
+         OR LOWER(scientific_name) LIKE LOWER($1)
+      ORDER BY CASE
+        WHEN LOWER(name) = LOWER($2) THEN 1
+        WHEN LOWER(scientific_name) = LOWER($2) THEN 2
+        ELSE 3
+      END, name
       LIMIT 50
     `;
 
-    const searchPattern = `%${query}%`;
-    const result = await pool.query(searchQuery, [searchPattern, query]);
+    const searchPattern = `%${query.toLowerCase()}%`;
+
+    const result = await pool.query(searchSql, [
+      searchPattern,
+      query.toLowerCase(),
+    ]);
+
     res.json(result.rows.map(formatPlantForFrontend));
   } catch (error) {
     console.error('❌ Error searching plants:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 // POST /api/plants/recognize
 app.post('/api/plants/recognize', async (req, res) => {
