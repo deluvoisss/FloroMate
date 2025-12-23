@@ -847,6 +847,11 @@ async function translatePlantWithGroq(scientificName) {
     console.log(`✅ Groq enriched: ${plantData.name || scientificName}`);
     console.log('📊 Fields received:', Object.keys(plantData).join(', '));
 
+    const content = response.data.choices[0].message.content.trim();
+    let jsonContent = content.replace(/``````\n?/g, '');
+    const plantData = JSON.parse(jsonContent);
+    
+    console.log(`✅ Groq перевел: ${plantData.name}`);
     return plantData;
 
   } catch (error) {
@@ -962,6 +967,31 @@ app.post('/api/chat', async (req, res) => {
     res.json({ response: aiResponse });
 
   } catch (error) {
+    console.error('❌ Ошибка GigaChat:', error.message);
+    res.status(500).json({
+      error: 'Ошибка обработки запроса',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+app.post('/api/plants/enrich', async (req, res) => {
+  try {
+    const { scientificName } = req.body;
+    
+    if (!scientificName) {
+      return res.status(400).json({ error: 'scientificName required' });
+    }
+
+    console.log(`🧠 Groq enrich: ${scientificName}`);
+    const groqData = await translatePlantWithGroq(scientificName);
+    
+    res.json({
+      scientificName,
+      enriched: true,
+      data: groqData
+    });
+  } catch (error) {
     console.error('❌ GigaChat error:', error.message);
     res.status(500).json({
       error: 'Request processing error',
@@ -990,6 +1020,611 @@ app.get('/api/health', (req, res) => {
 // DEBUG ROUTES
 // ========================
 
+// PLANT.ID DISEASE DETECTION
+// ========================
+if (!PLANT_ID_API_KEY) {
+  console.warn('⚠️ PLANT_ID_API_KEY не найден в .env');
+} else {
+  console.log('✅ PLANT_ID_API_KEY загружен');
+}
+
+const diseaseTranslations = {
+  'rust': 'Ржавчина',
+  'fungi': 'Грибки',
+  'fungus': 'Грибок',
+  'animalia': 'Животные вредители',
+  'insecta': 'Насекомые',
+  'senescence': 'Старение',
+  'mold': 'Плесень',
+  'mildew': 'Мучнистая роса',
+  'blight': 'Фитофтороз',
+  'rot': 'Гниль',
+  'wilt': 'Увядание',
+  'spot': 'Пятнистость',
+  'leaf spot': 'Пятнистость листьев',
+  'powdery mildew': 'Мучнистая роса',
+  'downy mildew': 'Ложная мучнистая роса',
+  'anthracnose': 'Антракноз',
+  'canker': 'Рак растений',
+  'scab': 'Парша',
+  'virus': 'Вирус',
+  'bacteria': 'Бактерии',
+  'bacterial': 'Бактериальный',
+  'fungal': 'Грибковый',
+  'pest': 'Вредитель',
+  'disease': 'Болезнь',
+  'nutrient deficiency': 'Дефицит питательных веществ',
+  'nitrogen deficiency': 'Дефицит азота',
+  'iron deficiency': 'Дефицит железа',
+  'water stress': 'Водный стресс',
+  'sunburn': 'Солнечный ожог',
+  'frost damage': 'Повреждение морозом'
+};
+
+function translateDiseaseName(englishName) {
+  if (!englishName || typeof englishName !== 'string') {
+    return 'Неизвестная проблема';
+  }
+  
+  const lowerName = englishName.toLowerCase().trim();
+  
+  if (diseaseTranslations[lowerName]) {
+    return diseaseTranslations[lowerName];
+  }
+  
+  for (const [eng, rus] of Object.entries(diseaseTranslations)) {
+    if (lowerName.includes(eng)) {
+      return rus;
+    }
+  }
+  
+  return englishName;
+}
+
+app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
+  try {
+    console.log('🦠 Получен запрос на определение болезни растения');
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'Загрузите изображение' });
+    }
+
+    if (!PLANT_ID_API_KEY) {
+      return res.status(500).json({ error: 'PLANT_ID_API_KEY не настроен на сервере' });
+    }
+
+    const base64Image = req.file.buffer.toString('base64');
+    console.log('🚀 Отправляем запрос к Plant.id Health Assessment API...');
+
+    const requestBody = {
+      images: [`data:image/jpeg;base64,${base64Image}`],
+      latitude: 49.207,
+      longitude: 16.608,
+      similar_images: true,
+      health: 'all'
+    };
+
+    const axiosConfig = {
+      headers: {
+        'Api-Key': PLANT_ID_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      params: {
+        language: 'ru',
+        details: 'common_names,description,treatment,classification,cause,url'
+      },
+      timeout: 60000
+    };
+
+    if (PROXY_SERVER) {
+      axiosConfig.httpAgent = new HttpProxyAgent(PROXY_SERVER);
+      axiosConfig.httpsAgent = new HttpsProxyAgent(PROXY_SERVER);
+      console.log('🔌 Используем прокси для Plant.id');
+    }
+
+    const response = await axios.post(
+      'https://api.plant.id/v3/health_assessment',
+      requestBody,
+      axiosConfig
+    );
+
+    const data = response.data;
+    console.log('✅ Результат получен от Plant.id');
+
+    const isHealthy = data.result?.is_healthy?.binary ?? true;
+    const isHealthyProb = data.result?.is_healthy?.probability ?? 1;
+    const diseaseSuggestions = data.result?.disease?.suggestions ?? [];
+
+    console.log('Здоровое растение:', isHealthy);
+    console.log('Найдено болезней:', diseaseSuggestions.length);
+
+    const formattedResponse = {
+      is_healthy: isHealthy,
+      is_healthy_probability: isHealthyProb,
+      diseases: diseaseSuggestions.map(disease => {
+        const apiRussianName = disease.details?.common_names?.[0];
+        const translatedName = translateDiseaseName(disease.name);
+        const russianName = apiRussianName || translatedName;
+        
+        return {
+          name: russianName,
+          scientific_name: disease.name || '',
+          common_names: disease.details?.common_names || [russianName],
+          probability: disease.probability ?? 0,
+          description: disease.details?.description || null,
+          treatment: disease.details?.treatment?.biological || disease.details?.treatment?.chemical || disease.details?.treatment?.prevention || null,
+          url: disease.details?.url || null,
+          cause: disease.details?.cause || null,
+          classification: disease.details?.classification ? translateDiseaseName(disease.details.classification) : 'Проблема'
+        };
+      }),
+      best_match: diseaseSuggestions.length > 0 ? (() => {
+        const topDisease = diseaseSuggestions[0];
+        const apiRussianName = topDisease.details?.common_names?.[0];
+        const translatedName = translateDiseaseName(topDisease.name);
+        const russianName = apiRussianName || translatedName;
+        
+        return {
+          disease_name: russianName,
+          scientific_name: topDisease.name || '',
+          common_names: topDisease.details?.common_names || [russianName],
+          confidence: topDisease.probability ?? 0,
+          description: topDisease.details?.description || null,
+          treatment: topDisease.details?.treatment || null,
+          cause: topDisease.details?.cause || null,
+          severity: topDisease.details?.classification ? translateDiseaseName(topDisease.details.classification) : 'Проблема'
+        };
+      })() : null
+    };
+
+    res.json(formattedResponse);
+  } catch (error) {
+    console.error('❌ Ошибка Plant.id:', error.response?.status, error.message);
+    console.error('Детали ошибки:', error.response?.data);
+    res.status(error.response?.status || 500).json({
+      error: error.message,
+      details: error.response?.data,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// ========================
+// LANDSCAPE DESIGN ROUTES (GigaChat Pro)
+// ========================
+
+app.post('/api/landscape/generate', upload.single('image'), async (req, res) => {
+  try {
+    console.log('🌿 Получен запрос на генерацию ландшафта (GigaChat Pro)');
+
+    if (!req.file && !req.body.prompt) {
+      return res.status(400).json({ error: 'Загрузите изображение или введите описание ландшафта' });
+    }
+
+    if (!GIGACHAT_AUTH_KEY2) {
+      return res.status(500).json({ error: 'GIGACHAT_AUTH_KEY2 не настроен на сервере' });
+    }
+
+    const userPrompt = req.body.prompt || '';
+    
+    // Системный защитный промпт для фильтрации нерелевантных запросов
+    const safetySystemPrompt = 
+      'Ты профессиональный ландшафтный дизайнер и эксперт по описанию изображений. ' +
+      'Твоя задача - работать ТОЛЬКО с запросами, связанными с ландшафтным дизайном, садоводством, растениями, ' +
+      'озеленением участков, дизайном садов и парков. ' +
+      'Если пользователь задает вопрос или просит что-то, НЕ связанное с ландшафтным дизайном, садоводством или растениями, ' +
+      'вежливо откажи и объясни, что ты специализируешься только на ландшафтном дизайне. ' +
+      'Принимай только запросы про: растения, деревья, кустарники, цветы, сады, парки, ландшафты, ' +
+      'озеленение, дизайн участков, садоводство, уход за растениями.';
+
+    const defaultPrompt = 
+      'Сделай этот ландшафт реалистичным, эстетически красивым и реализуемым в реальности. ' +
+      'Добавь растения, деревья, кустарники и другие элементы ландшафтного дизайна, ' +
+      'но не изменяй кардинально композицию и перспективу. Улучши внешний вид участка, ' +
+      'сохраняя его структуру.';
+
+    const finalUserPrompt = userPrompt.trim() || defaultPrompt;
+
+    if (req.file) {
+      console.log('📋 Размер файла:', req.file.size, 'байт');
+      console.log('📋 MIME тип:', req.file.mimetype);
+    } else {
+      console.log('📝 Запрос без изображения, только текстовый промпт');
+    }
+
+    // 1. Получаем access token для GigaChat Pro
+    const accessToken = await getLandscapeAccessToken();
+
+    let imageDescription = '';
+    let fileId = null;
+
+    // 2. Если есть изображение - загружаем и анализируем
+    if (req.file) {
+      console.log('📤 Этап 1: Загружаем изображение в хранилище GigaChat...');
+    const uploadForm = new FormData();
+    uploadForm.append('file', req.file.buffer, {
+      filename: req.file.originalname || 'landscape.jpg',
+      contentType: req.file.mimetype,
+    });
+    uploadForm.append('purpose', 'general');
+
+    const uploadResponse = await axios.post(
+      'https://gigachat.devices.sberbank.ru/api/v1/files',
+      uploadForm,
+      {
+        headers: {
+          ...uploadForm.getHeaders(),
+          Authorization: `Bearer ${accessToken}`,
+        },
+        httpsAgent,
+        timeout: 60000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
+    );
+
+      fileId = uploadResponse.data?.id;
+    if (!fileId) {
+        throw new Error('Не удалось загрузить изображение');
+    }
+    console.log('✅ Файл загружен в GigaChat, id:', fileId);
+
+      // 3. Этап 1: Анализируем изображение и получаем детальное промпт-описание для улучшенной версии
+      console.log('🔍 Этап 1: Анализируем изображение и создаем промпт для улучшенной версии...');
+
+      const analysisResponse = await axios.post(
+      'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
+      {
+        model: 'GigaChat-Pro',
+        messages: [
+          {
+            role: 'system',
+              content: safetySystemPrompt + ' ' +
+                'Твоя задача - детально описать изображение ландшафта и создать точное текстовое описание ' +
+                'улучшенной версии этого ландшафта для последующей генерации изображения. ' +
+                'Описание должно быть максимально детальным и включать все элементы: растения, деревья, ' +
+                'кустарники, структуру участка, перспективу, освещение, цвета, стиль дизайна.',
+          },
+          {
+            role: 'user',
+              content: `Проанализируй это изображение ландшафта. Учти следующие пожелания: ${finalUserPrompt}. ` +
+                `Создай детальное текстовое описание улучшенной версии этого ландшафта. ` +
+                `Описание должно быть максимально точным и детальным, чтобы по нему можно было сгенерировать ` +
+                `реалистичное изображение улучшенного ландшафтного дизайна. ` +
+                `Верни только описание, без дополнительных комментариев.`,
+            attachments: [fileId],
+          },
+        ],
+        stream: false,
+        update_interval: 0,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        httpsAgent,
+        timeout: 120000,
+      }
+    );
+
+      imageDescription = 
+        analysisResponse.data?.choices?.[0]?.message?.content ||
+        analysisResponse.data?.message?.content ||
+        '';
+
+      if (!imageDescription || imageDescription.trim().length < 50) {
+        throw new Error('Не удалось получить детальное описание изображения от нашей модели');
+      }
+
+      console.log('✅ Получено описание для генерации (длина:', imageDescription.length, 'символов)');
+      console.log('📋 Промпт:', imageDescription.substring(0, 200) + '...');
+    } else {
+      // Если нет изображения - используем пользовательский промпт напрямую
+      console.log('📝 Этап 1 пропущен: нет изображения, используем текстовый промпт напрямую');
+      imageDescription = finalUserPrompt;
+    }
+
+    // 4. Этап 2: Генерируем улучшенное изображение по детальному описанию используя text2image
+    console.log('🎨 Этап 2: Генерируем улучшенное изображение по описанию...');
+    
+    const chatResponse = await axios.post(
+      'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
+      {
+        model: 'GigaChat-Pro',
+        messages: [
+          {
+            role: 'system',
+            content: safetySystemPrompt + ' ' +
+              'Твоя задача - создать детальное текстовое описание ландшафта для генерации изображения. ' +
+              'Описание должно быть максимально точным и детальным.',
+          },
+          {
+            role: 'user',
+            content: `Сгенерируй реалистичное изображение ландшафтного дизайна по следующему детальному описанию: ${imageDescription}`,
+          },
+        ],
+        stream: false,
+        update_interval: 0,
+        function_call: 'auto', // Включаем автоматический вызов функции text2image
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        httpsAgent,
+        timeout: 180000, // Увеличиваем таймаут до 3 минут для генерации изображений
+      }
+    );
+
+    // Логируем полную структуру ответа для отладки
+    console.log('✅ Ответ GigaChat Pro получен. Полная структура ответа:');
+    console.log(JSON.stringify(chatResponse.data, null, 2));
+
+    // Ответ может быть в формате { message: { content: "<img src=\"...\"/>", ... } }
+    // или в openai-совместимом формате с choices[0].message.content
+    const rawMessageContent =
+      chatResponse.data?.message?.content ||
+      chatResponse.data?.choices?.[0]?.message?.content ||
+      '';
+
+    console.log('✅ Извлеченный Content:', rawMessageContent);
+    console.log('✅ Тип content:', typeof rawMessageContent);
+    console.log('✅ Длина content:', rawMessageContent?.length || 0);
+    
+    // Проверяем все возможные поля, где может быть изображение
+    console.log('✅ Структура choices[0].message:', JSON.stringify(chatResponse.data?.choices?.[0]?.message, null, 2));
+
+    // Проверяем function_call в ответе - если использовался function calling для text2image
+    const functionCall = chatResponse.data?.choices?.[0]?.message?.function_call;
+    if (functionCall) {
+      console.log('🔧 Обнаружен function_call:', JSON.stringify(functionCall, null, 2));
+      
+      // Если функция text2image была вызвана, результат может быть в function_call.result или в следующем ответе
+      if (functionCall.name === 'text2image' || functionCall.function_name === 'text2image') {
+        console.log('🎨 Найден вызов функции text2image');
+        
+        // Результат может быть в function_call.arguments или в отдельном поле
+        const functionResult = functionCall.result || functionCall.arguments;
+        console.log('📋 Результат function_call:', functionResult);
+        
+        // Если есть image_id или file_id в результате
+        if (functionResult && typeof functionResult === 'string') {
+          try {
+            const parsed = JSON.parse(functionResult);
+            if (parsed.image_id || parsed.file_id || parsed.id) {
+              const imageId = parsed.image_id || parsed.file_id || parsed.id;
+              console.log('🎨 Найден ID изображения в function_call.result:', imageId);
+              
+              // Скачиваем изображение
+              try {
+                const fileResponse = await axios.get(
+                  `https://gigachat.devices.sberbank.ru/api/v1/files/${imageId}/content`,
+                  {
+                    headers: {
+                      Accept: 'image/jpeg, image/png, image/*',
+                      Authorization: `Bearer ${accessToken}`,
+                    },
+                    httpsAgent,
+                    responseType: 'arraybuffer',
+                    timeout: 120000,
+                  }
+                );
+                
+                const contentType = fileResponse.headers['content-type'] || 'image/jpeg';
+                const base64Image = Buffer.from(fileResponse.data, 'binary').toString('base64');
+                const dataUrl = `data:${contentType};base64,${base64Image}`;
+                
+                return res.json({
+                  imageUrl: dataUrl,
+                  prompt: finalUserPrompt,
+                  generatedPrompt: imageDescription,
+                  message: 'Ландшафт успешно обработан',
+                });
+              } catch (fileError) {
+                console.error('❌ Ошибка при скачивании файла из function_call:', fileError.message);
+              }
+            }
+          } catch (e) {
+            console.log('⚠️ Не удалось распарсить function_call.result как JSON');
+          }
+        }
+      }
+    }
+
+    // Проверяем, есть ли изображение в base64 прямо в ответе
+    const base64ImageMatch = rawMessageContent.match(/data:image\/([^;]+);base64,([A-Za-z0-9+/=]+)/);
+    if (base64ImageMatch) {
+      console.log('✅ Найдено изображение в base64 прямо в ответе');
+      const dataUrl = base64ImageMatch[0];
+      return res.json({
+        imageUrl: dataUrl,
+        prompt: finalUserPrompt,
+        generatedPrompt: imageDescription,
+        message: 'Ландшафт успешно обработан',
+      });
+    }
+
+    // Парсим ID изображения из тега <img src="ID"/> или других форматов
+    const imgMatch = rawMessageContent.match(/<img[^>]*src=["']([^"']+)["']/);
+    
+    // Также проверяем другие возможные форматы: file://, просто ID, UUID и т.д.
+    let generatedImageId = null;
+    
+    if (imgMatch && imgMatch[1]) {
+      generatedImageId = imgMatch[1].trim();
+      console.log('🎨 Найден ID изображения из тега img:', generatedImageId);
+    } else {
+      // Пробуем найти ID в других форматах
+      // Проверяем attachments в сообщении
+      const messageAttachments = 
+        chatResponse.data?.choices?.[0]?.message?.attachments ||
+        chatResponse.data?.message?.attachments ||
+        [];
+      
+      console.log('📎 Проверяем attachments в сообщении:', JSON.stringify(messageAttachments, null, 2));
+      
+      if (messageAttachments.length > 0) {
+        // Ищем file_id или id в attachments
+        const attachment = messageAttachments.find(a => a.file_id || a.id) || messageAttachments[0];
+        generatedImageId = attachment.file_id || attachment.id;
+        console.log('🎨 Найден ID из attachments:', generatedImageId);
+      }
+      
+      // Проверяем другие поля в ответе, где может быть ID файла
+      if (!generatedImageId) {
+        const allKeys = Object.keys(chatResponse.data?.choices?.[0]?.message || {});
+        console.log('📋 Все ключи в message:', allKeys);
+        
+        // Проверяем, может быть изображение в других полях
+        if (chatResponse.data?.choices?.[0]?.message?.function_call) {
+          console.log('🔧 Найден function_call:', JSON.stringify(chatResponse.data.choices[0].message.function_call, null, 2));
+        }
+        
+        // Пробуем извлечь ID из текста ответа (может быть просто ID без тегов)
+        const idMatch = rawMessageContent.match(/[a-f0-9]{32,}/i);
+        if (idMatch) {
+          generatedImageId = idMatch[0];
+          console.log('🎨 Найден потенциальный ID из текста:', generatedImageId);
+        }
+      }
+    }
+    
+    if (!generatedImageId) {
+      console.error('❌ Не удалось найти ID изображения. Полная структура ответа:');
+      console.error(JSON.stringify({
+        data: chatResponse.data,
+        messageContent: rawMessageContent,
+        messageKeys: chatResponse.data?.choices?.[0]?.message ? Object.keys(chatResponse.data.choices[0].message) : []
+      }, null, 2));
+      
+      // Если в ответе есть сообщение об ошибке или ограничении, возвращаем его пользователю
+      const errorMessage = rawMessageContent || 'Неизвестная ошибка';
+      
+      // Возвращаем детальную информацию об ошибке с полной структурой ответа для отладки
+      return res.status(500).json({
+        error: 'Наша модель не смогла сгенерировать изображение',
+        message: errorMessage,
+        debug: {
+          hasContent: !!rawMessageContent,
+          contentLength: rawMessageContent?.length || 0,
+          contentPreview: rawMessageContent?.substring(0, 500),
+          hasAttachments: !!(chatResponse.data?.choices?.[0]?.message?.attachments?.length),
+          hasFunctionCall: !!chatResponse.data?.choices?.[0]?.message?.function_call,
+          responseStructure: {
+            hasChoices: !!chatResponse.data?.choices,
+            choicesLength: chatResponse.data?.choices?.length || 0,
+            messageKeys: chatResponse.data?.choices?.[0]?.message ? Object.keys(chatResponse.data.choices[0].message) : []
+          }
+        },
+        details: 'Попробуйте изменить описание или загрузить другое изображение'
+      });
+    }
+
+    console.log('🎨 Идентификатор сгенерированного изображения для скачивания:', generatedImageId);
+
+    // Проверяем, что ID выглядит валидным
+    if (generatedImageId.includes('777777777777') || generatedImageId.length < 10) {
+      console.warn('⚠️ Подозрительный ID изображения:', generatedImageId);
+    }
+
+    // 4. Скачиваем сгенерированное изображение по его идентификатору
+    console.log('📥 Скачиваем сгенерированное изображение из GigaChat...');
+    
+    let fileResponse;
+    let retries = 2;
+    let lastError;
+    
+    // Пробуем скачать файл несколько раз с задержкой (файл может быть еще не готов)
+    while (retries > 0) {
+    try {
+      fileResponse = await axios.get(
+        `https://gigachat.devices.sberbank.ru/api/v1/files/${generatedImageId}/content`,
+        {
+          headers: {
+              Accept: 'image/jpeg, image/png, image/*',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          httpsAgent,
+          responseType: 'arraybuffer',
+          timeout: 120000,
+        }
+      );
+        break; // Успешно, выходим из цикла
+    } catch (fileError) {
+        lastError = fileError;
+        console.error(`❌ Ошибка при скачивании файла (попытка ${3 - retries + 1}):`, {
+        status: fileError.response?.status,
+          statusText: fileError.response?.statusText,
+          data: fileError.response?.data?.toString?.() || fileError.response?.data,
+        message: fileError.message,
+      });
+      
+        if (fileError.response?.status === 404) {
+          // Файл не найден - возможно нужно подождать или использовать другой endpoint
+          if (retries > 1) {
+            console.log('⏳ Файл еще не готов, ждем 2 секунды и пробуем снова...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            retries--;
+            continue;
+          }
+        } else {
+          // Другая ошибка - не пробуем снова
+          break;
+        }
+        retries--;
+      }
+    }
+    
+    if (!fileResponse) {
+      throw new Error(
+        `Не удалось получить сгенерированное изображение после нескольких попыток. Попробуйте еще раз.`
+      );
+    }
+
+    const contentType = fileResponse.headers['content-type'] || 'image/jpeg';
+    const base64Image = Buffer.from(fileResponse.data, 'binary').toString('base64');
+    const dataUrl = `data:${contentType};base64,${base64Image}`;
+
+    console.log('✅ Ландшафт успешно сгенерирован GigaChat Pro');
+
+    res.json({
+      imageUrl: dataUrl,
+      prompt: finalUserPrompt,
+      generatedPrompt: imageDescription,
+      message: 'Ландшафт успешно обработан',
+    });
+  } catch (error) {
+    console.error('❌ Ошибка генерации ландшафта через GigaChat Pro:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+    });
+
+    // Если это ошибка лимитов — отдаем понятный ответ
+    if (error.response?.status === 429) {
+      return res.status(429).json({
+        error: 'Превышен лимит запросов',
+        message: 'Слишком много запросов. Пожалуйста, подождите немного и попробуйте снова.',
+        retryAfter: error.response.headers?.['retry-after'] || 60,
+      });
+    }
+
+    // Больше не возвращаем оригинальное изображение — отдаем реальную ошибку
+    return res.status(error.response?.status || 500).json({
+      error: 'Ошибка генерации ландшафта',
+      message: error.message,
+      details: error.response?.data || null,
+    });
+  }
+});
+
+// ========================
+// DEBUG: QUICK TEST USER
+// ========================
 app.post('/api/debug/create-test-user', async (req, res) => {
   try {
     const passwordHash = await bcrypt.hash('test123', 10);
@@ -1046,6 +1681,82 @@ app.get('/api/debug/plants-direct', async (req, res) => {
       error: error.message,
       stack: error.stack
     });
+// Запуск сервера
+app.listen(PORT, () => {
+  console.log(`🌿 FloroMate API запущен: http://localhost:${PORT}`);
+  console.log('📦 PostgreSQL:', DATABASE_URL);
+  console.log('POST /api/identify - распознавание растений');
+  console.log('POST /api/chat - AI чат');
+  console.log('GET /api/plants - список растений');
+  console.log('GET /api/plants/search?query=... - поиск растений');
+  console.log('POST /api/plants/recognize - сохранить распознанное растение');
+  console.log('POST /api/plants/enrich - обогащение данных растения (GigaChat)');
+  console.log('GET /api/plants/photo - фото растения (Perenual)');
+  console.log('POST /api/landscape/generate - генерация дизайна ландшафта');
+  console.log('GET /api/health - проверка состояния API');
+  console.log('🔐 Authentication endpoints:');
+  console.log('  POST /api/auth/init-db - инициализация БД');
+  console.log('  GET /api/auth/check-username - проверка username');
+  console.log('  POST /api/auth/send-verification - отправка кода');
+  console.log('  POST /api/auth/verify-code - верификация и регистрация');
+  console.log('  POST /api/auth/reset-password - сброс пароля');
+  console.log('  POST /api/auth/login - вход в систему');
+  console.log('🌱 Plant endpoints:');
+  console.log('  POST /api/identify - распознавание растений');
+  console.log('  POST /api/chat - AI чат');
+  console.log('  GET /api/plants - список растений');
+  console.log('  GET /api/plants/search?query=... - поиск растений');
+  console.log('  POST /api/plants/recognize - сохранить распознанное растение');
+  console.log('  POST /api/plants/enrich - обогащение данных растения');
+  console.log('  POST /api/disease-detect - определение болезней растений');
+  console.log('  GET /api/health - проверка состояния API');
+}); 
+
+// ========================
+// FEEDBACK ROUTES
+// ========================
+
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const { name, email, message, rating, suggestions } = req.body;
+
+    if (!message || message.trim().length < 10) {
+      return res.status(400).json({ 
+        error: 'Сообщение должно содержать минимум 10 символов' 
+      });
+    }
+
+    // Логируем обратную связь (в продакшене можно отправить на email или сохранить в БД)
+    console.log('📝 Новая обратная связь:');
+    console.log('  Имя:', name || 'Не указано');
+    console.log('  Email:', email || 'Не указан');
+    console.log('  Оценка:', rating || 'Не указана');
+    console.log('  Сообщение:', message);
+    if (suggestions) {
+      console.log('  Предложения:', suggestions);
+    }
+
+    // В продакшене здесь можно добавить отправку email через nodemailer или другой сервис
+    // Например: await sendEmail({ to: 'artsint@mail.ru', subject: 'Обратная связь FloroMate', text: ... });
+
+    res.json({ 
+      success: true, 
+      message: 'Спасибо за вашу обратную связь! Мы обязательно учтем ваши предложения.' 
+    });
+  } catch (error) {
+    console.error('❌ Ошибка обработки обратной связи:', error);
+    res.status(500).json({ error: 'Ошибка при отправке обратной связи' });
+  }
+});
+
+// 🔍 ДЕБАГ
+app.get('/api/debug/models-check', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const modelsPath = path.join(__dirname, '../../public/treeModels');
+  
+  if (!fs.existsSync(modelsPath)) {
+    return res.json({ error: 'Папка не существует', path: modelsPath });
   }
 });
 
@@ -1068,3 +1779,165 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
+// ============================================
+// API ROUTE: /api/garden-chat - GARDEN AI
+// ============================================
+app.post('/api/garden-chat', async (req, res) => {
+  try {
+    const { userMessage, gardenContext } = req.body;
+
+    if (!userMessage || typeof userMessage !== 'string') {
+      return res.status(400).json({ error: 'userMessage is required' });
+    }
+
+    console.log('🌱 Garden AI Request:', userMessage);
+
+    // 🔐 Получаем токен
+    const token = await getAccessToken();
+
+    // 📝 Системный промпт для ИИ
+ const systemPrompt = `Ты — профессиональный агроном и опытный садовод с 20-летним стажем. 
+Ты помогаешь людям решать проблемы с растениями в огороде и саду.
+
+Когда пользователь описывает проблему или состояние сада — ТЫ ОБЯЗАТЕЛЬНО:
+
+1. Даёшь точный анализ причины проблемы (2–4 предложения).
+2. Предлагаешь КОНКРЕТНЫЕ действия: что делать, когда, как.
+3. Всегда рекомендуешь подходящие удобрения — с ПРИМЕРАМИ реальных препаратов (например: аммиачная селитра, суперфосфат, калийная соль, Кемира, Фертика, куриный помёт и т.д.).
+4. Даёшь точный режим полива: сколько литров, как часто, утром/вечером, под корень или опрыскивание.
+5. Создаёшь практичные задачи с чёткими инструкциями.
+6. Добавляешь запись в дневник сада с планом действий.
+
+ОТВЕЧАЙ ИСКЛЮЧИТЕЛЬНО ВАЛИДНЫМ JSON В ЭТОМ ФОРМАТЕ (без markdown, без лишнего текста):
+
+{
+  "analysis": "Краткий, но точный анализ проблемы и главная причина",
+  "tasks": [
+    {
+      "title": "Конкретное действие с эмодзи (например: '🌿 Полить помидоры тёплой водой')",
+      "dueDate": "YYYY-MM-DD (ближайший подходящий день)",
+      "urgent": true или false,
+      "description": "Подробная инструкция: как, сколько, чем, когда именно"
+    }
+  ],
+  "watering": [
+    {
+      "plant": "Точное название растения",
+      "frequency": "каждый день / через день / 2 раза в неделю и т.д.",
+      "amount": "1–2 литра под куст / 0.5 литра на растение и т.д.",
+      "description": "Подробно: время суток, температура воды, способ полива"
+    }
+  ],
+  "fertilizer": [
+    {
+      "name": "Конкретное удобрение с эмодзи (например: '🌾 Аммиачная селитра', '🍂 Куриный помёт', '🧪 Фертика Универсал')",
+      "type": "минеральное / органическое / комплексное",
+      "schedule": "раз в неделю / раз в 10 дней / раз в 2 недели",
+      "amount": "10 г на 10 л воды / 1 ст. ложка на куст и т.д.",
+      "description": "Зачем нужно, как вносить (под корень, по листу), меры предосторожности"
+    }
+  ],
+  "diaryEntry": {
+    "title": "Краткий заголовок события/проблемы",
+    "text": "Полное описание: что произошло, причина, что делаем для решения, план на ближайшие дни"
+  }
+}
+
+СТРОГИЕ ПРАВИЛА:
+— ВСЕГДА возвращай ВСЕ поля (даже если массив пустой — оставь [])
+— ВСЕГДА предлагай хотя бы одно удобрение, если проблема связана с ростом, цветением, плодоношением или внешним видом
+— Удобрения — только реальные, доступные в магазинах (не выдуманные)
+— Даты — в формате YYYY-MM-DD, используй текущую дату ± несколько дней
+— НИКАКОГО текста вне JSON! Ни "Вот рекомендации", ни \`\`\`json
+— Если не уверен — всё равно дай рекомендации на основе типичных причин
+
+ПРИМЕРЫ ХОРОШИХ ОТВЕТОВ:
+
+Проблема: "Помидоры желтеют"
+{
+  "analysis": "Пожелтение листьев помидоров указывает на дефицит азота. Необходимо срочно внести азотное удобрение и обеспечить стабильный полив.",
+  "tasks": [
+    {
+      "title": "🌿 Внести азотное удобрение под помидоры",
+      "dueDate": "2025-12-22",
+      "urgent": true,
+      "description": "Развести селитру 10 грамм на 10 литров воды. Полить раствором 1 литр под каждый куст вечером по влажной почве."
+    }
+  ],
+  "watering": [
+    {
+      "plant": "Помидоры",
+      "frequency": "каждый день",
+      "amount": "1-2 литра под куст",
+      "description": "Поливать только под корень, избегая попадания на листья. Лучше рано утром или вечером."
+    }
+  ],
+  "fertilizer": [
+    {
+      "name": "🌾 Азотное удобрение (селитра)",
+      "type": "минеральное",
+      "schedule": "раз в 10 дней",
+      "amount": "10 грамм на 10 литров воды",
+      "description": "Азот стимулирует рост листвы. Вносить с начала вегетации до появления цветов."
+    }
+  ],
+  "diaryEntry": {
+    "title": "Дефицит азота у помидоров",
+    "text": "Обнаружены признаки нехватки азота: пожелтение нижних листьев. Запланирована подкормка селитрой и нормализация режима полива."
+  }
+}`;
+
+    // 🤖 Отправляем запрос к Gigachat
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: `Проблема с садом: ${userMessage}\n\nТекущее состояние сада:\n${JSON.stringify(
+          gardenContext,
+          null,
+          2,
+        )}`,
+      },
+    ];
+
+    const chatResponse = await axios.post(
+      'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
+      {
+        model: 'GigaChat',
+        messages,
+        temperature: 0.7,
+        top_p: 0.1,
+        max_tokens: 2000,
+        stream: false,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      },
+    );
+
+    const aiText = chatResponse.data.choices[0].message.content;
+    console.log('🤖 AI Response:', aiText);
+
+    // 🎯 Парсим JSON из ответа
+    const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('AI не вернул корректный JSON');
+    }
+
+    const gardenData = JSON.parse(jsonMatch[0]);
+
+    console.log('✅ Parsed Garden Data:', gardenData);
+    res.json(gardenData);
+  } catch (error) {
+    console.error('❌ Garden AI Error:', error.message);
+    res.status(500).json({
+      error: error.message || 'Garden AI processing error',
+    });
+  }
+});
