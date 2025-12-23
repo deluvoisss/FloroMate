@@ -19,45 +19,46 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const app = express();
 const PORT = 3001;
 
-// Переменные из .env
+// Environment variables
 const API_KEY = process.env.API_KEY;
 const PROXY_SERVER = process.env.PROXY_SERVER;
 const GIGACHAT_AUTH_KEY = process.env.GIGACHAT_AUTH_KEY;
-// Отдельный ключ для ландшафтного дизайна (GigaChat Pro)
 const GIGACHAT_AUTH_KEY2 = process.env.GIGACHAT_AUTH_KEY2;
 const GIGACHAT_SCOPE = 'GIGACHAT_API_PERS';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/floromate_db';
 const PLANT_ID_API_KEY = process.env.PLANT_ID_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Проверка обязательных переменных
+// Validation
 if (!GROQ_API_KEY) {
-  console.error('❌ Ошибка: GROQ_API_KEY не найден в .env');
+  console.error('❌ Error: GROQ_API_KEY not found in .env');
   process.exit(1);
 }
 
-console.log('✅ GROQ_API_KEY загружен');
+console.log('✅ GROQ_API_KEY loaded');
 
 if (!API_KEY) {
-  console.error('❌ Ошибка: API_KEY не найден в .env');
+  console.error('❌ Error: API_KEY not found in .env');
   process.exit(1);
 }
 
 if (!GIGACHAT_AUTH_KEY) {
-  console.error('❌ Ошибка: GIGACHAT_AUTH_KEY не найден в .env');
+  console.error('❌ Error: GIGACHAT_AUTH_KEY not found in .env');
   process.exit(1);
 }
 
-console.log('✅ API_KEY загружен');
-console.log('✅ GIGACHAT_AUTH_KEY загружен');
+console.log('✅ API_KEY loaded');
+console.log('✅ GIGACHAT_AUTH_KEY loaded');
 console.log('✅ DATABASE_URL:', DATABASE_URL);
+
 if (PROXY_SERVER) {
-  console.log('🔌 Proxy сервер:', PROXY_SERVER);
+  console.log('🔌 Proxy server:', PROXY_SERVER);
 }
 
 if (!GIGACHAT_AUTH_KEY2) {
-  console.warn('⚠️ GIGACHAT_AUTH_KEY2 не найден в .env — раздел ландшафтного дизайна работать не будет');
+  console.warn('⚠️ GIGACHAT_AUTH_KEY2 not found in .env — landscape design section will not work');
 }
+
 // PostgreSQL Pool
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -75,12 +76,9 @@ pool.on('error', (err) => {
 // ========================
 const verificationCodes = new Map();
 
-// ========================
-// ЗАГЛУШКА: КОД ТОЛЬКО В КОНСОЛЬ
-// ========================
-console.log('📝 Режим разработки: коды выводятся только в консоль');
+console.log('📝 Development mode: codes output to console only');
 
-// Безопасные заголовки
+// Security headers
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -104,19 +102,18 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
 app.use(express.static(path.join(__dirname, '../../public')));
 app.use('/images3D', express.static(path.join(__dirname, '../../public/images3D')));
 app.use('/treeModels', express.static(path.join(__dirname, '../../public/treeModels')));
 
-// Multer конфигурация
+// Multer config
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-// HTTPS агент
+// HTTPS agent
 const httpsAgent = new https.Agent({
   rejectUnauthorized: false
 });
@@ -125,6 +122,32 @@ const httpsAgent = new https.Agent({
 // DATABASE HELPER
 // ========================
 function formatPlantForFrontend(row) {
+  let features = row.features;
+  if (typeof features === 'string') {
+    try {
+      features = JSON.parse(features);
+    } catch (e) {
+      features = features ? [features] : [];
+    }
+  }
+
+  if (!Array.isArray(features)) {
+    features = features ? [features] : [];
+  }
+
+  let dangers = row.dangers;
+  if (typeof dangers === 'string' && dangers.startsWith('[')) {
+    try {
+      dangers = JSON.parse(dangers);
+    } catch (e) {
+      // keep as string
+    }
+  }
+
+  if (!Array.isArray(dangers) && dangers) {
+    dangers = [dangers];
+  }
+
   return {
     id: row.id,
     name: row.name,
@@ -142,10 +165,10 @@ function formatPlantForFrontend(row) {
       temperature: row.temperature,
       humidity: row.humidity
     },
-    features: row.features,
-    dangers: row.dangers,
+    features: features,
+    dangers: dangers || [],
     maintenance: row.maintenance,
-    isRecognized: row.is_recognized,
+    isRecognized: row.is_recognized || false,
     genus: row.genus,
     family: row.family,
     confidence: row.confidence
@@ -156,7 +179,7 @@ function formatPlantForFrontend(row) {
 // AUTHENTICATION ROUTES
 // ========================
 
-// Инициализация таблицы users
+// Init DB
 app.post('/api/auth/init-db', async (req, res) => {
   try {
     await pool.query(`
@@ -173,120 +196,93 @@ app.post('/api/auth/init-db', async (req, res) => {
       CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
       CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
     `);
-    console.log('✅ Таблица users создана');
+    console.log('✅ users table created');
     res.json({ message: 'Database initialized successfully' });
   } catch (error) {
-    console.error('❌ Ошибка создания таблицы:', error);
+    console.error('❌ Error creating table:', error);
     res.status(500).json({ error: 'Database initialization failed' });
   }
 });
 
-// Проверка доступности username
+// Check username availability
 app.get('/api/auth/check-username', async (req, res) => {
   try {
     const { username } = req.query;
     if (!username || username.length < 3) {
-      return res.status(400).json({
-        available: false,
-        error: 'Username too short'
-      });
+      return res.status(400).json({ available: false, error: 'Username too short' });
     }
 
-    const result = await pool.query(
-      'SELECT id FROM users WHERE username = $1',
-      [username]
-    );
-
+    const result = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
     const available = result.rows.length === 0;
-    console.log(`🔍 Проверка username "${username}": ${available ? 'доступен' : 'занят'}`);
+    console.log(`🔍 Username check "${username}": ${available ? 'available' : 'taken'}`);
     res.json({ available });
   } catch (error) {
-    console.error('❌ Ошибка проверки username:', error);
+    console.error('❌ Error checking username:', error);
     res.status(500).json({ available: false, error: 'Internal server error' });
   }
 });
 
-// Отправка кода верификации
+// Send verification code
 app.post('/api/auth/send-verification', async (req, res) => {
   try {
     const { phone, isPasswordReset } = req.body;
-    
     if (!phone) {
-      return res.status(400).json({ error: 'Номер телефона обязателен' });
+      return res.status(400).json({ error: 'Phone number required' });
     }
 
-    // Проверяем существование пользователя
-    const existingUser = await pool.query(
-      'SELECT id FROM users WHERE phone = $1',
-      [phone]
-    );
+    const existingUser = await pool.query('SELECT id FROM users WHERE phone = $1', [phone]);
 
     if (!isPasswordReset && existingUser.rows.length > 0) {
-      return res.status(400).json({
-        error: 'Пользователь с таким телефоном уже существует'
-      });
+      return res.status(400).json({ error: 'User with this phone already exists' });
     }
 
     if (isPasswordReset && existingUser.rows.length === 0) {
-      return res.status(400).json({
-        error: 'Пользователь с таким телефоном не найден'
-      });
+      return res.status(400).json({ error: 'User with this phone not found' });
     }
 
-    // Генерируем 6-значный код
     const code = crypto.randomInt(100000, 999999).toString();
-    
-    // Сохраняем код
     verificationCodes.set(phone, {
       code,
       expires: Date.now() + 5 * 60 * 1000,
       isPasswordReset: isPasswordReset || false
     });
 
-    // ✅ ТОЛЬКО КОНСОЛЬ
     console.log('\n' + '='.repeat(50));
-    console.log(`📱 КОД ВЕРИФИКАЦИИ ДЛЯ: ${phone}`);
-    console.log(`🔢 КОД: ${code}`);
-    console.log(`⏰ Действителен до: ${new Date(Date.now() + 5 * 60 * 1000).toLocaleTimeString()}`);
-    console.log(`📋 Тип: ${isPasswordReset ? 'Сброс пароля' : 'Регистрация'}`);
+    console.log(`📱 VERIFICATION CODE FOR: ${phone}`);
+    console.log(`🔢 CODE: ${code}`);
+    console.log(`⏰ Valid until: ${new Date(Date.now() + 5 * 60 * 1000).toLocaleTimeString()}`);
+    console.log(`📋 Type: ${isPasswordReset ? 'Password reset' : 'Registration'}`);
     console.log('='.repeat(50) + '\n');
 
-    res.json({ 
-      success: true, 
-      message: 'Код сгенерирован (проверь консоль сервера)',
-      code: code // Отправляем код на фронт для удобства
-    });
+    res.json({ success: true, message: 'Code generated (check server console)', code });
   } catch (error) {
-    console.error('❌ Ошибка отправки кода:', error);
-    res.status(500).json({ error: 'Не удалось отправить код' });
+    console.error('❌ Error sending code:', error);
+    res.status(500).json({ error: 'Failed to send code' });
   }
 });
 
-// Проверка кода и регистрация пользователя
+// Verify code and register
 app.post('/api/auth/verify-code', async (req, res) => {
   try {
     const { phone, code, userData } = req.body;
-    
     if (!phone || !code || !userData) {
-      return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Проверяем код верификации
     const storedData = verificationCodes.get(phone);
     if (!storedData) {
-      return res.status(400).json({ error: 'Код не найден или истёк срок действия' });
+      return res.status(400).json({ error: 'Code not found or expired' });
     }
 
     if (Date.now() > storedData.expires) {
       verificationCodes.delete(phone);
-      return res.status(400).json({ error: 'Срок действия кода истёк' });
+      return res.status(400).json({ error: 'Code has expired' });
     }
 
     if (storedData.code !== code) {
-      return res.status(400).json({ error: 'Неверный код' });
+      return res.status(400).json({ error: 'Incorrect code' });
     }
 
-    // Код верный, создаём пользователя
     const passwordHash = await bcrypt.hash(userData.password, 10);
     const result = await pool.query(
       `INSERT INTO users (first_name, last_name, phone, username, password_hash)
@@ -295,12 +291,9 @@ app.post('/api/auth/verify-code', async (req, res) => {
       [userData.firstName, userData.lastName, phone, userData.username, passwordHash]
     );
 
-    // Удаляем использованный код
     verificationCodes.delete(phone);
-
     const user = result.rows[0];
-    console.log(`✅ Пользователь зарегистрирован: ${user.username}`);
-    
+    console.log(`✅ User registered: ${user.username}`);
     res.json({
       success: true,
       user: {
@@ -312,41 +305,36 @@ app.post('/api/auth/verify-code', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Ошибка верификации:', error);
+    console.error('❌ Error verifying code:', error);
     if (error.code === '23505') {
-      return res.status(400).json({
-        error: 'Имя пользователя или телефон уже используется'
-      });
+      return res.status(400).json({ error: 'Username or phone already in use' });
     }
-    res.status(500).json({ error: 'Ошибка регистрации' });
+    res.status(500).json({ error: 'Registration error' });
   }
 });
 
-// Сброс пароля
+// Reset password
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
     const { phone, code, newPassword } = req.body;
-    
     if (!phone || !code || !newPassword) {
-      return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Проверяем код
     const storedData = verificationCodes.get(phone);
     if (!storedData || !storedData.isPasswordReset) {
-      return res.status(400).json({ error: 'Неверный код или код не для сброса пароля' });
+      return res.status(400).json({ error: 'Invalid code or not for password reset' });
     }
 
     if (Date.now() > storedData.expires) {
       verificationCodes.delete(phone);
-      return res.status(400).json({ error: 'Срок действия кода истёк' });
+      return res.status(400).json({ error: 'Code has expired' });
     }
 
     if (storedData.code !== code) {
-      return res.status(400).json({ error: 'Неверный код' });
+      return res.status(400).json({ error: 'Incorrect code' });
     }
 
-    // Обновляем пароль
     const passwordHash = await bcrypt.hash(newPassword, 10);
     const result = await pool.query(
       `UPDATE users SET password_hash = $1 WHERE phone = $2
@@ -355,15 +343,12 @@ app.post('/api/auth/reset-password', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Пользователь не найден' });
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    // Удаляем использованный код
     verificationCodes.delete(phone);
-
     const user = result.rows[0];
-    console.log(`✅ Пароль изменен для: ${user.username}`);
-    
+    console.log(`✅ Password changed for: ${user.username}`);
     res.json({
       success: true,
       user: {
@@ -375,46 +360,32 @@ app.post('/api/auth/reset-password', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Ошибка сброса пароля:', error);
-    res.status(500).json({ error: 'Ошибка сброса пароля' });
+    console.error('❌ Error resetting password:', error);
+    res.status(500).json({ error: 'Password reset error' });
   }
 });
 
-// Вход в систему
+// Login
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    
     if (!username || !password) {
-      return res.status(400).json({ error: 'Требуется имя пользователя и пароль' });
+      return res.status(400).json({ error: 'Username and password required' });
     }
 
-    // Ищем пользователя
-    const result = await pool.query(
-      'SELECT * FROM users WHERE username = $1',
-      [username]
-    );
-
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
     if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
 
     const user = result.rows[0];
-
-    // Проверяем пароль
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) {
-      return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // Обновляем время последнего входа
-    await pool.query(
-      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
-      [user.id]
-    );
-
-    console.log(`✅ Вход выполнен: ${user.username}`);
-    
+    await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+    console.log(`✅ Login: ${user.username}`);
     res.json({
       success: true,
       user: {
@@ -426,8 +397,8 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Ошибка входа:', error);
-    res.status(500).json({ error: 'Ошибка входа в систему' });
+    console.error('❌ Login error:', error);
+    res.status(500).json({ error: 'Login error' });
   }
 });
 
@@ -439,7 +410,10 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/plants', async (req, res) => {
   try {
     const { colors, habitats, sizes, page = 1, limit = 12 } = req.query;
-    let query = 'SELECT * FROM plants WHERE 1=1';
+    console.log('📋 GET /api/plants query params:', { colors, habitats, sizes, page, limit });
+
+    let query = 'SELECT * FROM public.plants WHERE 1=1';
+
     const params = [];
     let paramIndex = 1;
 
@@ -467,22 +441,36 @@ app.get('/api/plants', async (req, res) => {
     const countQuery = query.replace('SELECT *', 'SELECT COUNT(*)');
     const countResult = await pool.query(countQuery, params);
     const totalCount = parseInt(countResult.rows[0].count, 10);
+    console.log(`📊 Total plants: ${totalCount}`);
 
     const offset = (Number(page) - 1) * Number(limit);
-    query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    query += ` ORDER BY id DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     params.push(Number(limit), offset);
 
+    console.log('🔍 Executing query:', query);
     const result = await pool.query(query, params);
+    console.log(`✅ Found ${result.rows.length} plants`);
 
-    res.json({
-      plants: result.rows.map(formatPlantForFrontend),
+    const formattedPlants = result.rows.map((row, index) => {
+      try {
+        return formatPlantForFrontend(row);
+      } catch (error) {
+        console.error(`❌ Error formatting plant ${index}:`, error);
+        return null;
+      }
+    }).filter(plant => plant !== null);
+
+    const responseData = {
+      plants: formattedPlants,
       totalPages: Math.ceil(totalCount / Number(limit)),
       currentPage: Number(page),
       total: totalCount
-    });
+    };
+
+    res.json(responseData);
   } catch (error) {
-    console.error('Error fetching plants:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Error fetching plants:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });
 
@@ -491,13 +479,13 @@ app.get('/api/plants/search', async (req, res) => {
   try {
     const { query } = req.query;
     if (!query || typeof query !== 'string') {
-      return res.status(400).json({ error: 'Query parameter is required' });
+      return res.status(400).json({ error: 'Query parameter required' });
     }
 
     const searchQuery = `
-      SELECT * FROM plants
+      SELECT * FROM FROM public.plants
       WHERE LOWER(name) LIKE LOWER($1)
-         OR LOWER(scientific_name) LIKE LOWER($1)
+      OR LOWER(scientific_name) LIKE LOWER($1)
       ORDER BY
         CASE
           WHEN LOWER(name) = LOWER($2) THEN 1
@@ -510,10 +498,9 @@ app.get('/api/plants/search', async (req, res) => {
 
     const searchPattern = `%${query}%`;
     const result = await pool.query(searchQuery, [searchPattern, query]);
-
     res.json(result.rows.map(formatPlantForFrontend));
   } catch (error) {
-    console.error('Error searching plants:', error);
+    console.error('❌ Error searching plants:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -527,6 +514,8 @@ app.post('/api/plants/recognize', async (req, res) => {
       humidity, features, dangers, maintenance, genus, family, confidence
     } = req.body;
 
+    console.log('🌱 POST /api/plants/recognize called');
+
     if (!scientificName) {
       return res.status(400).json({ error: 'Scientific name required' });
     }
@@ -537,6 +526,7 @@ app.post('/api/plants/recognize', async (req, res) => {
     );
 
     if (existing.rows.length > 0) {
+      console.log(`⚠️ Plant already exists: ${scientificName}`);
       return res.json({
         message: 'Plant already exists',
         plant: formatPlantForFrontend(existing.rows[0]),
@@ -551,38 +541,46 @@ app.post('/api/plants/recognize', async (req, res) => {
         humidity, features, dangers, maintenance, genus, family, confidence,
         is_recognized
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,
-        $8,$9,$10,$11,$12,
-        $13,$14,$15,$16,$17,$18,$19,
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12,
+        $13, $14, $15, $16, $17, $18, $19,
         true
       )
       RETURNING *
     `;
 
     const values = [
-      name || scientificName,
-      scientificName,
-      image,
-      color,
-      habitat,
-      size,
-      category,
-      categoryName,
-      description,
-      watering,
-      light,
-      temperature,
-      humidity,
-      features && Array.isArray(features) ? JSON.stringify(features) : null,
-      dangers,
-      maintenance,
-      genus,
-      family,
-      confidence || 0.95
+      name || scientificName,                          // $1
+      scientificName,                                  // $2
+      image || null,                                   // $3
+      color || null,                                   // $4
+      habitat || null,                                 // $5
+      size || null,                                    // $6
+      category || null,                                // $7
+      categoryName || null,                            // $8
+      description || null,                             // $9
+      watering || null,                                // $10
+      light || null,                                   // $11
+      temperature || null,                             // $12
+      humidity || null,                                // $13
+      features && Array.isArray(features) ? JSON.stringify(features) : null,  // $14
+      dangers || null,                                 // $15
+      maintenance || null,                             // $16
+      genus || null,                                   // $17
+      family || null,                                  // $18
+      confidence || 0.95                               // $19
     ];
 
+    console.log('💾 Inserting plant:', {
+      name: values[0],
+      scientificName: values[1],
+      hasImage: !!values[2],
+      color: values[3],
+      habitat: values[4]
+    });
+
     const result = await pool.query(query, values);
-    console.log(`✅ FULL Plant added: ${scientificName}`);
+    console.log(`✅ Plant added: ${scientificName} (ID: ${result.rows[0]?.id})`);
 
     res.status(201).json({
       message: 'Plant fully added',
@@ -590,14 +588,19 @@ app.post('/api/plants/recognize', async (req, res) => {
       isNew: true
     });
   } catch (error) {
-    console.error('Error adding full plant:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Error adding plant:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      details: error.message,
+      code: error.code
+    });
   }
 });
 
 // ========================
 // PLANT RECOGNITION (PlantNet)
 // ========================
+
 async function identifyPlant(images) {
   const form = new FormData();
   try {
@@ -611,7 +614,8 @@ async function identifyPlant(images) {
       form.append('organs', img.organ);
     });
 
-    console.log('🚀 Отправляем запрос к PlantNet API...');
+    console.log('🚀 Sending to PlantNet API...');
+
     const axiosConfig = {
       headers: form.getHeaders(),
       maxBodyLength: Infinity,
@@ -622,7 +626,7 @@ async function identifyPlant(images) {
     if (PROXY_SERVER) {
       axiosConfig.httpAgent = new HttpProxyAgent(PROXY_SERVER);
       axiosConfig.httpsAgent = new HttpsProxyAgent(PROXY_SERVER);
-      console.log('🔌 Используем прокси для PlantNet');
+      console.log('🔌 Using proxy for PlantNet');
     }
 
     const response = await axios.post(
@@ -631,11 +635,11 @@ async function identifyPlant(images) {
       axiosConfig
     );
 
-    console.log('✅ Результат получен:', response.data.results?.length || 0, 'совпадений');
+    console.log('✅ PlantNet results:', response.data.results?.length || 0);
     return response.data;
   } catch (error) {
-    console.error('❌ Ошибка PlantNet:', error.response?.status, error.message);
-    throw new Error(`PlantNet ошибка: ${error.message}`);
+    console.error('❌ PlantNet error:', error.response?.status, error.message);
+    throw new Error(`PlantNet error: ${error.message}`);
   }
 }
 
@@ -644,10 +648,9 @@ app.post('/api/identify', upload.fields([
   { name: 'leaf', maxCount: 1 }
 ]), async (req, res) => {
   try {
-    console.log('🌿 Получен запрос на определение растения');
-
+    console.log('🌿 Plant identification request received');
     if (!req.files || (!req.files['flower'] && !req.files['leaf'])) {
-      return res.status(400).json({ error: 'Загрузите хотя бы одно изображение' });
+      return res.status(400).json({ error: 'Upload at least one image' });
     }
 
     const images = [];
@@ -670,7 +673,7 @@ app.post('/api/identify', upload.fields([
     const data = await identifyPlant(images);
     res.json(data);
   } catch (error) {
-    console.error('❌ Ошибка определения растения:', error.message);
+    console.error('❌ Plant identification error:', error.message);
     res.status(500).json({
       error: error.message,
       timestamp: new Date().toISOString()
@@ -681,17 +684,18 @@ app.post('/api/identify', upload.fields([
 // ========================
 // GIGACHAT & GROQ ROUTES
 // ========================
+
 let cachedToken = null;
 let tokenExpiry = null;
 
 async function getAccessToken() {
   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
-    console.log('🔑 Используем кэшированный токен');
+    console.log('🔑 Using cached token');
     return cachedToken;
   }
 
   try {
-    console.log('🔑 Запрашиваем новый токен...');
+    console.log('🔑 Requesting new token...');
     const response = await axios.post(
       'https://ngw.devices.sberbank.ru:9443/api/v2/oauth',
       `scope=${GIGACHAT_SCOPE}`,
@@ -708,30 +712,30 @@ async function getAccessToken() {
 
     cachedToken = response.data.access_token;
     tokenExpiry = Date.now() + 29 * 60 * 1000;
-    console.log('✅ Токен получен успешно');
+    console.log('✅ Token received');
     return cachedToken;
   } catch (error) {
-    console.error('❌ Ошибка получения токена:', error.message);
+    console.error('❌ Token error:', error.message);
     throw error;
   }
 }
 
-// Отдельный токен для ландшафтного дизайна (использует GIGACHAT_AUTH_KEY2)
+// Separate token for landscape design
 let landscapeToken = null;
 let landscapeTokenExpiry = null;
 
 async function getLandscapeAccessToken() {
   if (landscapeToken && landscapeTokenExpiry && Date.now() < landscapeTokenExpiry) {
-    console.log('🔑 Используем кэшированный токен (landscape)');
+    console.log('🔑 Using cached token (landscape)');
     return landscapeToken;
   }
 
   if (!GIGACHAT_AUTH_KEY2) {
-    throw new Error('GIGACHAT_AUTH_KEY2 не настроен в .env');
+    throw new Error('GIGACHAT_AUTH_KEY2 not configured in .env');
   }
 
   try {
-    console.log('🔑 Запрашиваем новый токен для ландшафтного дизайна...');
+    console.log('🔑 Requesting new token for landscape...');
     const response = await axios.post(
       'https://ngw.devices.sberbank.ru:9443/api/v2/oauth',
       `scope=${GIGACHAT_SCOPE}`,
@@ -743,31 +747,55 @@ async function getLandscapeAccessToken() {
           'Authorization': `Basic ${GIGACHAT_AUTH_KEY2}`
         },
         httpsAgent
-      } 
+      }
     );
 
     landscapeToken = response.data.access_token;
     landscapeTokenExpiry = Date.now() + 29 * 60 * 1000;
-    console.log('✅ Токен для ландшафтного дизайна получен успешно');
+    console.log('✅ Landscape token received');
     return landscapeToken;
   } catch (error) {
-    console.error('❌ Ошибка получения токена для ландшафтного дизайна:', error.message);
+    console.error('❌ Landscape token error:', error.message);
     throw error;
   }
 }
 
 // ========================
-// GROQ AI TRANSLATION
+// GROQ AI TRANSLATION (IMPROVED)
 // ========================
+
 async function translatePlantWithGroq(scientificName) {
   try {
-    console.log(`🤖 Groq обрабатывает: ${scientificName}`);
-    const prompt = `Ты ботаник. Для растения "${scientificName}" верни ТОЛЬКО JSON:
+    console.log(`🤖 Groq processing: ${scientificName}`);
+
+    const prompt = `Ты ботаник-эксперт. Для растения "${scientificName}" верни ТОЛЬКО валидный JSON (без markdown):
+
 {
-  "name": "Полное русское название растения (например: Тюльпан Геснера, Роза садовая)",
-  "commonName": "Народное название"
+  "name": "Название на русском",
+  "commonName": "Популярное название",
+  "description": "2-3 предложения описания растения на русском",
+  "color": "Цвет цветков/листьев (зеленый, красный, фиолетовый, желтый, белый, розовый, оранжевый, синий)",
+  "habitat": "Место произрастания (комнатное, уличное, водное)",
+  "size": "Размер взрослого растения (маленькое, среднее, большое)",
+  "category": "Категория (лиственное, цветущее, суккулент, папоротник, вьющийся, кустарник, дерево)",
+  "categoryName": "Полное название категории на русском",
+  "watering": "Частота полива (Частый, Умеренный, Редкий)",
+  "light": "Требуемое освещение (Яркий свет, Рассеянный свет, Полутень, Тень)",
+  "temperature": "Оптимальная температура (например: 18-25°C)",
+  "humidity": "Требуемая влажность (например: 50-70%)",
+  "features": [
+    "Особенность 1",
+    "Особенность 2",
+    "Особенность 3"
+  ],
+  "dangers": "Опасности для домашних животных или людей (ядовитое для кого и чем/неядовитое)",
+  "maintenance": "Уровень сложности ухода (Низкий, Средний, Высокий)"
 }
-ВАЖНО: "name" должно быть ПОЛНЫМ названием с видом, не общим словом!`;
+
+ВАЖНО:
+- Верни ТОЛЬКО JSON, без markdown блоков
+- Все значения должны быть строками или массивами строк
+- Если информации недостаточно, используй разумные значения по умолчанию`;
 
     const axiosConfig = {
       headers: {
@@ -780,7 +808,7 @@ async function translatePlantWithGroq(scientificName) {
     if (PROXY_SERVER) {
       axiosConfig.httpAgent = new HttpProxyAgent(PROXY_SERVER);
       axiosConfig.httpsAgent = new HttpsProxyAgent(PROXY_SERVER);
-      console.log('🔌 Используем прокси для Groq');
+      console.log('🔌 Using proxy for Groq');
     }
 
     const response = await axios.post(
@@ -790,18 +818,34 @@ async function translatePlantWithGroq(scientificName) {
         messages: [
           {
             role: 'system',
-            content: 'Ты ботаник-эксперт. Отвечай ТОЛЬКО валидным JSON без markdown.'
+            content: 'Ты ботаник-эксперт. Отвечай ТОЛЬКО валидным JSON без markdown блоков и комментариев.'
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        temperature: 0.2,
-        max_tokens: 512
+        temperature: 0.3,
+        max_tokens: 1024
       },
       axiosConfig
     );
+
+    let content = response.data.choices[0].message.content.trim();
+    
+    // Clean up markdown code blocks if present
+    content = content
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .replace(/```/g, '')
+      .trim();
+
+    console.log('📝 Raw Groq response:', content.substring(0, 200) + '...');
+
+    const plantData = JSON.parse(content);
+
+    console.log(`✅ Groq enriched: ${plantData.name || scientificName}`);
+    console.log('📊 Fields received:', Object.keys(plantData).join(', '));
 
     const content = response.data.choices[0].message.content.trim();
     let jsonContent = content.replace(/``````\n?/g, '');
@@ -809,25 +853,95 @@ async function translatePlantWithGroq(scientificName) {
     
     console.log(`✅ Groq перевел: ${plantData.name}`);
     return plantData;
+
   } catch (error) {
-    console.error('❌ Ошибка Groq:', error.message);
+    console.error('❌ Groq error:', error.message);
+    if (error.response?.data) {
+      console.error('Groq API error:', error.response.data);
+    }
     return null;
   }
 }
 
+// POST /api/plants/enrich
+app.post('/api/plants/enrich', async (req, res) => {
+  try {
+    const { scientificName } = req.body;
+    
+    if (!scientificName) {
+      console.log('❌ scientificName is missing');
+      return res.status(400).json({ 
+        error: 'scientificName required',
+        scientificName: null,
+        enriched: false,
+        data: null
+      });
+    }
+
+    console.log(`🤖 Enriching plant: ${scientificName}`);
+
+    // Call Groq
+    const groqData = await translatePlantWithGroq(scientificName);
+
+    if (!groqData) {
+      console.log(`⚠️ Groq returned null for: ${scientificName}`);
+      return res.json({
+        scientificName,
+        enriched: false,
+        data: null,
+        message: 'Could not enrich plant data'
+      });
+    }
+
+    console.log(`✅ Plant enriched from Groq:`, {
+      scientificName,
+      name: groqData.name,
+      fields: Object.keys(groqData).join(', ')
+    });
+
+    res.json({
+      scientificName,
+      enriched: true,
+      data: groqData
+    });
+
+  } catch (error) {
+    console.error('❌ Error in /api/plants/enrich:', error.message);
+    res.status(500).json({
+      error: 'Enrichment failed',
+      details: error.message,
+      scientificName: req.body?.scientificName || null,
+      enriched: false,
+      data: null
+    });
+  }
+});
+
+// POST /api/chat
 app.post('/api/chat', async (req, res) => {
   try {
-    console.log('💬 Получен запрос на чат');
+    console.log('💬 Chat request received');
     const { messages } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Неверный формат сообщений' });
+      return res.status(400).json({ error: 'Invalid message format' });
     }
 
     const accessToken = await getAccessToken();
+
     const systemMessage = {
       role: 'system',
-      content: 'Ты - эксперт по растениям и садоводству. Отвечай полезно на вопросы о растениях в двух трех предложениях, их уходе, болезнях и выращивании. Используй эмодзи растений 🌱🌿🌸. Не отвечай на вопросы несвязанные с растениями'
+      content: `Ты — профессиональный ботаник и эксперт по растениям. 
+Отвечай кратко (2-4 предложения) на вопросы о:
+- Уходе за растениями (полив, свет, температура, влажность)
+- Болезнях и вредителях
+- Размножении и пересадке
+- Выборе растений для дома и сада
+- Совместимости растений
+
+Используй эмодзи: 🌱🌿🌸🪴💧☀️🌡️
+
+Если вопрос НЕ о растениях — вежливо откажи и попроси задать вопрос о растениях.`
     };
 
     const response = await axios.post(
@@ -836,7 +950,7 @@ app.post('/api/chat', async (req, res) => {
         model: 'GigaChat',
         messages: [systemMessage, ...messages],
         temperature: 0.7,
-        max_tokens: 1024
+        max_tokens: 512
       },
       {
         headers: {
@@ -849,8 +963,9 @@ app.post('/api/chat', async (req, res) => {
     );
 
     const aiResponse = response.data.choices[0].message.content;
-    console.log('✅ Ответ получен от GigaChat');
+    console.log('✅ GigaChat response received');
     res.json({ response: aiResponse });
+
   } catch (error) {
     console.error('❌ Ошибка GigaChat:', error.message);
     res.status(500).json({
@@ -877,10 +992,10 @@ app.post('/api/plants/enrich', async (req, res) => {
       data: groqData
     });
   } catch (error) {
-    console.error('❌ Groq enrich error:', error.message);
+    console.error('❌ GigaChat error:', error.message);
     res.status(500).json({
-      error: 'Groq enrichment failed',
-      details: error.message
+      error: 'Request processing error',
+      details: error.response?.data || error.message
     });
   }
 });
@@ -888,6 +1003,7 @@ app.post('/api/plants/enrich', async (req, res) => {
 // ========================
 // HEALTH CHECK
 // ========================
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -901,6 +1017,9 @@ app.get('/api/health', (req, res) => {
 });
 
 // ========================
+// DEBUG ROUTES
+// ========================
+
 // PLANT.ID DISEASE DETECTION
 // ========================
 if (!PLANT_ID_API_KEY) {
@@ -1509,38 +1628,59 @@ app.post('/api/landscape/generate', upload.single('image'), async (req, res) => 
 app.post('/api/debug/create-test-user', async (req, res) => {
   try {
     const passwordHash = await bcrypt.hash('test123', 10);
-    
     const result = await pool.query(
       `INSERT INTO users (first_name, last_name, phone, username, password_hash)
-       VALUES ('Test', 'User', '+79999999999', 'testuser', $1)
-       RETURNING id, username, first_name`,
+       VALUES ('Test', 'User', '79999999999', 'testuser', $1)
+       RETURNING id, username, first_name, password_hash`,
       [passwordHash]
     );
-    
     console.log('✅ Test user created');
     res.json({
       success: true,
-      credentials: {
-        username: 'testuser',
-        password: 'test123'
-      }
+      credentials: { username: 'testuser', password: 'test123' }
     });
-    
   } catch (error) {
     if (error.code === '23505') {
       return res.json({
         message: 'User already exists',
-        credentials: {
-          username: 'testuser',
-          password: 'test123'
-        }
+        credentials: { username: 'testuser', password: 'test123' }
       });
     }
     res.status(500).json({ error: error.message });
   }
 });
 
+app.get('/api/debug/plants-direct', async (req, res) => {
+  try {
+    console.log('🔍 DEBUG: Direct query to plants table');
+    const countResult = await pool.query('SELECT COUNT(*) as count FROM plants');
+    const totalCount = parseInt(countResult.rows[0].count, 10);
+    console.log(`DEBUG: Total plants in DB: ${totalCount}`);
 
+    const result = await pool.query('SELECT * FROM plants ORDER BY id DESC LIMIT 50');
+    console.log(`DEBUG: Found ${result.rows.length} plants directly`);
+
+    res.json({
+      success: true,
+      totalCount: totalCount,
+      returnedCount: result.rows.length,
+      plants: result.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        scientific_name: row.scientific_name,
+        hasImage: !!row.image,
+        color: row.color,
+        habitat: row.habitat,
+        isRecognized: row.is_recognized
+      }))
+    });
+  } catch (error) {
+    console.error('DEBUG Error in direct query:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
 // Запуск сервера
 app.listen(PORT, () => {
   console.log(`🌿 FloroMate API запущен: http://localhost:${PORT}`);
@@ -1618,11 +1758,27 @@ app.get('/api/debug/models-check', (req, res) => {
   if (!fs.existsSync(modelsPath)) {
     return res.json({ error: 'Папка не существует', path: modelsPath });
   }
-  
-  const files = fs.readdirSync(modelsPath);
-  res.json({ success: true, count: files.length, files });
 });
 
+// ========================
+// START SERVER
+// ========================
+
+app.listen(PORT, () => {
+  console.log(`🌿 FloroMate API running on http://localhost:${PORT}`);
+  console.log(`🗄️ PostgreSQL: ${DATABASE_URL}`);
+  console.log('📝 Available endpoints:');
+  console.log('  POST /api/identify - Plant identification');
+  console.log('  POST /api/chat - AI chat');
+  console.log('  GET /api/plants - Get all plants');
+  console.log('  GET /api/plants/search?query=... - Search plants');
+  console.log('  POST /api/plants/recognize - Add recognized plant');
+  console.log('  POST /api/plants/enrich - Enrich plant with Groq');
+  console.log('  POST /api/plants/disease-detect - Disease detection');
+  console.log('  GET /api/health - API health check');
+});
+
+module.exports = app;
 
 // ============================================
 // API ROUTE: /api/garden-chat - GARDEN AI
