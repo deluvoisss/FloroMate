@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import '../types/App1.css';
 import { Viewport3D } from './Viewport3D.tsx';
 
+import { clearModelCache } from './Viewport3D.tsx';
 
 
 interface SceneObject {
@@ -123,6 +124,15 @@ const Editor: React.FC = () => {
   // 🔧 НОВЫЕ ПЕРЕМЕННЫЕ для отличия клика от перетаскивания
   const [mouseDownTime, setMouseDownTime] = useState(0);
   const [movedDistance, setMovedDistance] = useState(0);
+
+
+  useEffect(() => {
+  return () => {
+    console.log('🧹 LandscapeConstructor размонтирован, очищаю 3D кеш');
+    clearModelCache();
+  };
+}, []);
+
 
   // ✅ ОПТИМИЗИРОВАННЫЙ РЕНДЕР 2D
   useEffect(() => {
@@ -434,22 +444,33 @@ const Editor: React.FC = () => {
 
   // ✅ ПЕРЕКЛЮЧЕНИЕ 2D/3D
   const handle3DToggle = (enable3D: boolean) => {
-    if (enable3D) {
-      setLastSyncedObjects([...project.objects]);
-      setHas3DChanges(false);
+  if (enable3D) {
+    // ➡️ Переход в 3D
+    setLastSyncedObjects([...project.objects]);
+    setHas3DChanges(false);
+    console.log('📱 Переходим в 3D режим');
+  } else {
+    // ⬅️ Выход из 3D
+    console.log('📱 Выходим из 3D режима, очищаем кеш...');
+    clearModelCache(); // 🔥 главное добавление
+
+    if (has3DChanges) {
+      console.log('💾 Есть изменения в 3D, сохраняем...');
+      commitChanges();
     } else {
-      if (has3DChanges) {
-        commitChanges();
-      } else {
-        const newProject = { ...project, objects: [...lastSyncedObjects] };
-        setProject(newProject);
-        commitChanges();
-      }
-      setHas3DChanges(false);
+      console.log('🔄 Нет изменений, откатываемся к lastSyncedObjects');
+      const newProject = { ...project, objects: [...lastSyncedObjects] };
+      setProject(newProject);
+      commitChanges();
     }
-    setIs3D(enable3D);
-    setSelectedObjectId(null);
-  };
+
+    setHas3DChanges(false);
+  }
+
+  setIs3D(enable3D);
+  setSelectedObjectId(null);
+};
+
 
   // ✅ Обновление из 3D
   const handleObjectUpdate3D = (id: string, updates: Partial<SceneObject>) => {
