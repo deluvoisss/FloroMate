@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { HandleManager, type DraggedHandleData } from '../components/forConstrucotr/HandleManager';
 
+
+
 interface SceneObject {
   libraryId: string;
   id: string;
@@ -70,6 +72,41 @@ const WORLD_SIZE_Y = 23.33;
 const SCALE = CANVAS_WIDTH / WORLD_SIZE_X;
 const CANVAS_CENTER_X = CANVAS_WIDTH / 2;
 const CANVAS_CENTER_Y = CANVAS_HEIGHT / 2;
+
+export function clearModelCache() {
+  console.log('🧹 Начинаю очистку 3D кеша...');
+
+  modelCache.forEach((model) => {
+    try {
+      model.traverse((child: any) => {
+        if (child instanceof THREE.Mesh) {
+          if (child.geometry) {
+            child.geometry.dispose();
+          }
+          if (Array.isArray(child.material)) {
+            child.material.forEach((mat: any) => {
+              if (mat && typeof mat.dispose === 'function') {
+                mat.dispose();
+              }
+            });
+          } else if (child.material && typeof child.material.dispose === 'function') {
+            child.material.dispose();
+          }
+        }
+      });
+    } catch (error) {
+      console.error('⚠️ Ошибка при очистке модели из кеша:', error);
+    }
+  });
+
+  modelCache.clear();
+  loadingPromises.clear();
+  loadQueue.clear();
+  activeLoads = 0;
+  isProcessingQueue = false;
+
+  console.log('✅ 3D кеш полностью очищен');
+}
 
 function canvas2DToWorld3D(x: number, y: number) {
   return {
@@ -362,15 +399,75 @@ export const Viewport3D = ({
 
     window.addEventListener('resize', handleResize);
 
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      handleManagerRef.current?.dispose();
-      renderer.dispose();
-      if (container && renderer.domElement.parentNode === container) {
-        container.removeChild(renderer.domElement);
+     return () => {
+    console.log('🧹 Очищаю Viewport3D ресурсы...');
+
+    // 1️⃣ очищаем объекты, которые мы добавили на сцену
+    if (objectsRef.current) {
+      objectsRef.current.forEach((mesh) => {
+        mesh.traverse((child: any) => {
+          if (child instanceof THREE.Mesh) {
+            if (child.geometry) {
+              child.geometry.dispose();
+            }
+            if (Array.isArray(child.material)) {
+              child.material.forEach((mat: any) => {
+                if (mat && typeof mat.dispose === 'function') {
+                  mat.dispose();
+                }
+              });
+            } else if (child.material && typeof child.material.dispose === 'function') {
+              child.material.dispose();
+            }
+          }
+        });
+      });
+      objectsRef.current.clear();
+    }
+
+    // 2️⃣ очищаем материалы/геометрии остальных мешей в сцене
+    if (sceneRef.current) {
+      sceneRef.current.traverse((child: any) => {
+        if (child instanceof THREE.Mesh) {
+          if (child.geometry) {
+            child.geometry.dispose();
+          }
+          if (Array.isArray(child.material)) {
+            child.material.forEach((mat: any) => {
+              if (mat && typeof mat.dispose === 'function') {
+                mat.dispose();
+              }
+            });
+          } else if (child.material && typeof child.material.dispose === 'function') {
+            child.material.dispose();
+          }
+        }
+      });
+    }
+
+    // 3️⃣ убираем renderer и WebGL контекст
+    if (rendererRef.current) {
+      try {
+        rendererRef.current.dispose();
+        // освобождаем GPU контекст, как рекомендуют в three.js [web:5][web:8]
+        (rendererRef.current as any).forceContextLoss?.();
+      } catch (e) {
+        console.error('⚠️ Ошибка при dispose renderer:', e);
       }
-    };
-  }, []);
+
+      if (container && rendererRef.current.domElement.parentNode === container) {
+        container.removeChild(rendererRef.current.domElement);
+      }
+    }
+
+    // 4️⃣ отписываемся от событий
+    window.removeEventListener('resize', handleResize);
+    // 5️⃣ чистим HandleManager, если у него есть dispose
+    handleManagerRef.current?.dispose?.();
+
+    console.log('✅ Viewport3D полностью очищен');
+  };
+}, []);
 
   useEffect(() => {
     if (!sceneRef.current || !groundRef.current) return;
