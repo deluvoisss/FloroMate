@@ -58,7 +58,13 @@ const Encyclopedia: React.FC = () => {
   }, [filters, currentPage, searchQuery]);
   
 
-  const filteredPlants = plants;
+  const filteredPlants = plants.filter(plant => {
+    const colorMatch = filters.colors.length === 0 || filters.colors.includes(plant.color);
+    const habitatMatch = filters.habitats.length === 0 || filters.habitats.includes(plant.habitat);
+    const sizeMatch = filters.sizes.length === 0 || filters.sizes.includes(plant.size);
+    
+    return colorMatch && habitatMatch && sizeMatch;
+  });
 
   const handleFilterChange = (filterType: FilterType, value: string) => {
     setFilters((prev) => {
