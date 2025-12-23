@@ -23,6 +23,28 @@ module.exports = {
         "os": require.resolve("os-browserify/browser"),
         "crypto": require.resolve("crypto-browserify")
       }
+    },
+    module: {
+      rules: [
+        {
+          test: /\.js$/,
+          include: /node_modules\/three/,
+          use: {
+            loader: 'babel-loader',
+            options: {
+              presets: ['@babel/preset-env'],
+              plugins: []
+            }
+          }
+        },
+        {
+          test: /\.(jpg|jpeg|png|gif|svg)$/i,
+          type: 'asset/resource',
+          generator: {
+            filename: 'images/[name].[hash][ext]'
+          }
+        }
+      ]
     }
   },
 

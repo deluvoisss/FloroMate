@@ -806,7 +806,7 @@ async function translatePlantWithGroq(scientificName) {
     const content = response.data.choices[0].message.content.trim();
     let jsonContent = content.replace(/``````\n?/g, '');
     const plantData = JSON.parse(jsonContent);
-
+    
     console.log(`✅ Groq перевел: ${plantData.name}`);
     return plantData;
   } catch (error) {
@@ -863,14 +863,14 @@ app.post('/api/chat', async (req, res) => {
 app.post('/api/plants/enrich', async (req, res) => {
   try {
     const { scientificName } = req.body;
-
+    
     if (!scientificName) {
       return res.status(400).json({ error: 'scientificName required' });
     }
 
     console.log(`🧠 Groq enrich: ${scientificName}`);
     const groqData = await translatePlantWithGroq(scientificName);
-
+    
     res.json({
       scientificName,
       enriched: true,
@@ -946,26 +946,26 @@ function translateDiseaseName(englishName) {
   if (!englishName || typeof englishName !== 'string') {
     return 'Неизвестная проблема';
   }
-
+  
   const lowerName = englishName.toLowerCase().trim();
-
+  
   if (diseaseTranslations[lowerName]) {
     return diseaseTranslations[lowerName];
   }
-
+  
   for (const [eng, rus] of Object.entries(diseaseTranslations)) {
     if (lowerName.includes(eng)) {
       return rus;
     }
   }
-
+  
   return englishName;
 }
 
 app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
   try {
     console.log('🦠 Получен запрос на определение болезни растения');
-
+    
     if (!req.file) {
       return res.status(400).json({ error: 'Загрузите изображение' });
     }
@@ -1026,7 +1026,7 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
         const apiRussianName = disease.details?.common_names?.[0];
         const translatedName = translateDiseaseName(disease.name);
         const russianName = apiRussianName || translatedName;
-
+        
         return {
           name: russianName,
           scientific_name: disease.name || '',
@@ -1044,7 +1044,7 @@ app.post('/api/disease-detect', upload.single('image'), async (req, res) => {
         const apiRussianName = topDisease.details?.common_names?.[0];
         const translatedName = translateDiseaseName(topDisease.name);
         const russianName = apiRussianName || translatedName;
-
+        
         return {
           disease_name: russianName,
           scientific_name: topDisease.name || '',
@@ -1122,73 +1122,73 @@ app.post('/api/landscape/generate', upload.single('image'), async (req, res) => 
     // 2. Если есть изображение - загружаем и анализируем
     if (req.file) {
       console.log('📤 Этап 1: Загружаем изображение в хранилище GigaChat...');
-      const uploadForm = new FormData();
-      uploadForm.append('file', req.file.buffer, {
-        filename: req.file.originalname || 'landscape.jpg',
-        contentType: req.file.mimetype,
-      });
-      uploadForm.append('purpose', 'general');
+    const uploadForm = new FormData();
+    uploadForm.append('file', req.file.buffer, {
+      filename: req.file.originalname || 'landscape.jpg',
+      contentType: req.file.mimetype,
+    });
+    uploadForm.append('purpose', 'general');
 
-      const uploadResponse = await axios.post(
-        'https://gigachat.devices.sberbank.ru/api/v1/files',
-        uploadForm,
-        {
-          headers: {
-            ...uploadForm.getHeaders(),
-            Authorization: `Bearer ${accessToken}`,
-          },
-          httpsAgent,
-          timeout: 60000,
-          maxBodyLength: Infinity,
-          maxContentLength: Infinity,
-        }
-      );
+    const uploadResponse = await axios.post(
+      'https://gigachat.devices.sberbank.ru/api/v1/files',
+      uploadForm,
+      {
+        headers: {
+          ...uploadForm.getHeaders(),
+          Authorization: `Bearer ${accessToken}`,
+        },
+        httpsAgent,
+        timeout: 60000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
+    );
 
       fileId = uploadResponse.data?.id;
-      if (!fileId) {
+    if (!fileId) {
         throw new Error('Не удалось загрузить изображение');
-      }
-      console.log('✅ Файл загружен в GigaChat, id:', fileId);
+    }
+    console.log('✅ Файл загружен в GigaChat, id:', fileId);
 
       // 3. Этап 1: Анализируем изображение и получаем детальное промпт-описание для улучшенной версии
       console.log('🔍 Этап 1: Анализируем изображение и создаем промпт для улучшенной версии...');
-      
+
       const analysisResponse = await axios.post(
-        'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
-        {
-          model: 'GigaChat-Pro',
-          messages: [
-            {
-              role: 'system',
+      'https://gigachat.devices.sberbank.ru/api/v1/chat/completions',
+      {
+        model: 'GigaChat-Pro',
+        messages: [
+          {
+            role: 'system',
               content: safetySystemPrompt + ' ' +
                 'Твоя задача - детально описать изображение ландшафта и создать точное текстовое описание ' +
                 'улучшенной версии этого ландшафта для последующей генерации изображения. ' +
                 'Описание должно быть максимально детальным и включать все элементы: растения, деревья, ' +
                 'кустарники, структуру участка, перспективу, освещение, цвета, стиль дизайна.',
-            },
-            {
-              role: 'user',
+          },
+          {
+            role: 'user',
               content: `Проанализируй это изображение ландшафта. Учти следующие пожелания: ${finalUserPrompt}. ` +
                 `Создай детальное текстовое описание улучшенной версии этого ландшафта. ` +
                 `Описание должно быть максимально точным и детальным, чтобы по нему можно было сгенерировать ` +
                 `реалистичное изображение улучшенного ландшафтного дизайна. ` +
                 `Верни только описание, без дополнительных комментариев.`,
-              attachments: [fileId],
-            },
-          ],
-          stream: false,
-          update_interval: 0,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            Authorization: `Bearer ${accessToken}`,
+            attachments: [fileId],
           },
-          httpsAgent,
-          timeout: 120000,
-        }
-      );
+        ],
+        stream: false,
+        update_interval: 0,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        httpsAgent,
+        timeout: 120000,
+      }
+    );
 
       imageDescription = 
         analysisResponse.data?.choices?.[0]?.message?.content ||
@@ -1244,7 +1244,7 @@ app.post('/api/landscape/generate', upload.single('image'), async (req, res) => 
     // Логируем полную структуру ответа для отладки
     console.log('✅ Ответ GigaChat Pro получен. Полная структура ответа:');
     console.log(JSON.stringify(chatResponse.data, null, 2));
-    
+
     // Ответ может быть в формате { message: { content: "<img src=\"...\"/>", ... } }
     // или в openai-совместимом формате с choices[0].message.content
     const rawMessageContent =
@@ -1421,29 +1421,29 @@ app.post('/api/landscape/generate', upload.single('image'), async (req, res) => 
     
     // Пробуем скачать файл несколько раз с задержкой (файл может быть еще не готов)
     while (retries > 0) {
-      try {
-        fileResponse = await axios.get(
-          `https://gigachat.devices.sberbank.ru/api/v1/files/${generatedImageId}/content`,
-          {
-            headers: {
+    try {
+      fileResponse = await axios.get(
+        `https://gigachat.devices.sberbank.ru/api/v1/files/${generatedImageId}/content`,
+        {
+          headers: {
               Accept: 'image/jpeg, image/png, image/*',
-              Authorization: `Bearer ${accessToken}`,
-            },
-            httpsAgent,
-            responseType: 'arraybuffer',
-            timeout: 120000,
-          }
-        );
+            Authorization: `Bearer ${accessToken}`,
+          },
+          httpsAgent,
+          responseType: 'arraybuffer',
+          timeout: 120000,
+        }
+      );
         break; // Успешно, выходим из цикла
-      } catch (fileError) {
+    } catch (fileError) {
         lastError = fileError;
         console.error(`❌ Ошибка при скачивании файла (попытка ${3 - retries + 1}):`, {
-          status: fileError.response?.status,
+        status: fileError.response?.status,
           statusText: fileError.response?.statusText,
           data: fileError.response?.data?.toString?.() || fileError.response?.data,
-          message: fileError.message,
-        });
-        
+        message: fileError.message,
+      });
+      
         if (fileError.response?.status === 404) {
           // Файл не найден - возможно нужно подождать или использовать другой endpoint
           if (retries > 1) {
@@ -1571,6 +1571,43 @@ app.listen(PORT, () => {
   console.log('  POST /api/disease-detect - определение болезней растений');
   console.log('  GET /api/health - проверка состояния API');
 }); 
+
+// ========================
+// FEEDBACK ROUTES
+// ========================
+
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const { name, email, message, rating, suggestions } = req.body;
+
+    if (!message || message.trim().length < 10) {
+      return res.status(400).json({ 
+        error: 'Сообщение должно содержать минимум 10 символов' 
+      });
+    }
+
+    // Логируем обратную связь (в продакшене можно отправить на email или сохранить в БД)
+    console.log('📝 Новая обратная связь:');
+    console.log('  Имя:', name || 'Не указано');
+    console.log('  Email:', email || 'Не указан');
+    console.log('  Оценка:', rating || 'Не указана');
+    console.log('  Сообщение:', message);
+    if (suggestions) {
+      console.log('  Предложения:', suggestions);
+    }
+
+    // В продакшене здесь можно добавить отправку email через nodemailer или другой сервис
+    // Например: await sendEmail({ to: 'artsint@mail.ru', subject: 'Обратная связь FloroMate', text: ... });
+
+    res.json({ 
+      success: true, 
+      message: 'Спасибо за вашу обратную связь! Мы обязательно учтем ваши предложения.' 
+    });
+  } catch (error) {
+    console.error('❌ Ошибка обработки обратной связи:', error);
+    res.status(500).json({ error: 'Ошибка при отправке обратной связи' });
+  }
+});
 
 // 🔍 ДЕБАГ
 app.get('/api/debug/models-check', (req, res) => {
