@@ -766,8 +766,7 @@ async function getLandscapeAccessToken() {
 
 async function translatePlantWithGroq(scientificName) {
   try {
-    console.log(`🤖 Groq processing: ${scientificName}`);
-
+    console.log(`🤖 Groq обрабатывает: ${scientificName}`);
     const prompt = `Ты ботаник-эксперт. Для растения "${scientificName}" верни ТОЛЬКО валидный JSON (без markdown):
 
 {
@@ -796,7 +795,6 @@ async function translatePlantWithGroq(scientificName) {
 - Верни ТОЛЬКО JSON, без markdown блоков
 - Все значения должны быть строками или массивами строк
 - Если информации недостаточно, используй разумные значения по умолчанию`;
-
     const axiosConfig = {
       headers: {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
@@ -808,7 +806,7 @@ async function translatePlantWithGroq(scientificName) {
     if (PROXY_SERVER) {
       axiosConfig.httpAgent = new HttpProxyAgent(PROXY_SERVER);
       axiosConfig.httpsAgent = new HttpsProxyAgent(PROXY_SERVER);
-      console.log('🔌 Using proxy for Groq');
+      console.log('🔌 Используем прокси для Groq');
     }
 
     const response = await axios.post(
@@ -818,47 +816,31 @@ async function translatePlantWithGroq(scientificName) {
         messages: [
           {
             role: 'system',
-            content: 'Ты ботаник-эксперт. Отвечай ТОЛЬКО валидным JSON без markdown блоков и комментариев.'
+            content: 'Ты ботаник-эксперт. Отвечай ТОЛЬКО валидным JSON без markdown.'
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        temperature: 0.3,
-        max_tokens: 1024
+        temperature: 0.2,
+        max_tokens: 512
       },
       axiosConfig
     );
 
-    let content = response.data.choices[0].message.content.trim();
-    
-    // Clean up markdown code blocks if present
-    content = content
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .replace(/```/g, '')
-      .trim();
-
-    console.log('📝 Raw Groq response:', content.substring(0, 200) + '...');
-
-    const plantData = JSON.parse(content);
-
-    console.log(`✅ Groq enriched: ${plantData.name || scientificName}`);
-    console.log('📊 Fields received:', Object.keys(plantData).join(', '));
-
+    // ← ИСПРАВЛЕНО: только одно объявление content
     const content = response.data.choices[0].message.content.trim();
-    let jsonContent = content.replace(/``````\n?/g, '');
+
+    // Убираем markdown блоки
+    let jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').replace(/```/g, '').trim();
+
     const plantData = JSON.parse(jsonContent);
-    
+
     console.log(`✅ Groq перевел: ${plantData.name}`);
     return plantData;
-
   } catch (error) {
-    console.error('❌ Groq error:', error.message);
-    if (error.response?.data) {
-      console.error('Groq API error:', error.response.data);
-    }
+    console.error('❌ Ошибка Groq:', error.message);
     return null;
   }
 }
@@ -1656,10 +1638,8 @@ app.get('/api/debug/plants-direct', async (req, res) => {
     const countResult = await pool.query('SELECT COUNT(*) as count FROM plants');
     const totalCount = parseInt(countResult.rows[0].count, 10);
     console.log(`DEBUG: Total plants in DB: ${totalCount}`);
-
     const result = await pool.query('SELECT * FROM plants ORDER BY id DESC LIMIT 50');
     console.log(`DEBUG: Found ${result.rows.length} plants directly`);
-
     res.json({
       success: true,
       totalCount: totalCount,
@@ -1681,36 +1661,9 @@ app.get('/api/debug/plants-direct', async (req, res) => {
       error: error.message,
       stack: error.stack
     });
-// Запуск сервера
-app.listen(PORT, () => {
-  console.log(`🌿 FloroMate API запущен: http://localhost:${PORT}`);
-  console.log('📦 PostgreSQL:', DATABASE_URL);
-  console.log('POST /api/identify - распознавание растений');
-  console.log('POST /api/chat - AI чат');
-  console.log('GET /api/plants - список растений');
-  console.log('GET /api/plants/search?query=... - поиск растений');
-  console.log('POST /api/plants/recognize - сохранить распознанное растение');
-  console.log('POST /api/plants/enrich - обогащение данных растения (GigaChat)');
-  console.log('GET /api/plants/photo - фото растения (Perenual)');
-  console.log('POST /api/landscape/generate - генерация дизайна ландшафта');
-  console.log('GET /api/health - проверка состояния API');
-  console.log('🔐 Authentication endpoints:');
-  console.log('  POST /api/auth/init-db - инициализация БД');
-  console.log('  GET /api/auth/check-username - проверка username');
-  console.log('  POST /api/auth/send-verification - отправка кода');
-  console.log('  POST /api/auth/verify-code - верификация и регистрация');
-  console.log('  POST /api/auth/reset-password - сброс пароля');
-  console.log('  POST /api/auth/login - вход в систему');
-  console.log('🌱 Plant endpoints:');
-  console.log('  POST /api/identify - распознавание растений');
-  console.log('  POST /api/chat - AI чат');
-  console.log('  GET /api/plants - список растений');
-  console.log('  GET /api/plants/search?query=... - поиск растений');
-  console.log('  POST /api/plants/recognize - сохранить распознанное растение');
-  console.log('  POST /api/plants/enrich - обогащение данных растения');
-  console.log('  POST /api/disease-detect - определение болезней растений');
-  console.log('  GET /api/health - проверка состояния API');
-}); 
+  }
+});
+
 
 // ========================
 // FEEDBACK ROUTES
@@ -1797,7 +1750,7 @@ app.post('/api/garden-chat', async (req, res) => {
     const token = await getAccessToken();
 
     // 📝 Системный промпт для ИИ
- const systemPrompt = `Ты — профессиональный агроном и опытный садовод с 20-летним стажем. 
+  const systemPrompt = `Ты — профессиональный агроном и опытный садовод с 20-летним стажем. 
 Ты помогаешь людям решать проблемы с растениями в огороде и саду.
 
 Когда пользователь описывает проблему или состояние сада — ТЫ ОБЯЗАТЕЛЬНО:
@@ -1887,6 +1840,7 @@ app.post('/api/garden-chat', async (req, res) => {
     "text": "Обнаружены признаки нехватки азота: пожелтение нижних листьев. Запланирована подкормка селитрой и нормализация режима полива."
   }
 }`;
+
 
     // 🤖 Отправляем запрос к Gigachat
     const messages = [
