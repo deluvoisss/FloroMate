@@ -42,22 +42,20 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
 
   const getColorLabel = (color: string): string => {
     const labels: Record<string, string> = {
-      green: 'Зеленый',
-      red: 'Красный',
-      purple: 'Фиолетовый',
-      yellow: 'Желтый',
-      white: 'Белый',
-      pink: 'Розовый',
-      orange: 'Оранжевый',
-      blue: 'Синий'
+      'зеленый': 'Зеленый', 'красный': 'Красный', 'фиолетовый': 'Фиолетовый',
+      'желтый': 'Желтый', 'белый': 'Белый', 'розовый': 'Розовый',
+      'оранжевый': 'Оранжевый', 'синий': 'Синий'
     };
     return labels[color] || color.charAt(0).toUpperCase() + color.slice(1);
   };
 
-  const colorOptions: ColorOption[] = availableColors.map(color => ({
+  const colorOptions: ColorOption[] = availableColors
+  .map(color => ({
     value: color,
-    label: getColorLabel(color)
-  })).filter(option => option.value);
+    label: getColorLabel(color),
+    icon: '🌿' // ← ДОБАВЛЕН icon[file:4]
+  }))
+  .filter(option => option.value);
 
   const habitatOptions: HabitatOption[] = [
     { value: 'indoor', label: 'Комнатные', icon: '🏠' },

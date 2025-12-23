@@ -156,80 +156,81 @@ export const searchPlants = async (query: string): Promise<Plant[]> => {
 // RECOGNITION - PlantNet + Enrichment
 // ========================
 export const addRecognizedPlant = async (
-  plantData: any, 
-  genus?: string, 
-  family?: string, 
+  plantData: any,
+  genus?: string,
+  family?: string,
   confidence?: number
 ): Promise<any> => {
   try {
     console.log('Adding recognized plant', plantData.scientificName);
-    
-    // 1. Проверяем, существует ли растение
-    const checkResponse = await fetch(`${API_BASE_URL}plants/check`, {
+
+    // 1. Обогащаем через Groq
+    const enrichResponse = await fetch(`${API_BASE_URL}/plants/enrich`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scientificName: plantData.scientificName })
+      body: JSON.stringify({ scientificName: plantData.scientificName }),
     });
-    
-    const checkResult = await checkResponse.json();
-    if (checkResult.exists) {
-      console.log('Plant already exists:', plantData.scientificName);
-      return { plant: checkResult.plant, isNew: false };
+
+    if (!enrichResponse.ok) {
+      const text = await enrichResponse.text();
+      throw new Error(`Enrich failed: ${enrichResponse.status} ${text}`);
     }
 
-    // 2. GigaChat обогащение
-    const enrichedResponse = await enrichPlantData(plantData.scientificName);
-    const enriched = enrichedResponse?.data;
-    
-    // 3. Формируем данные с ЗАГЛУШКОЙ
+    const enrichResult = await enrichResponse.json();
+    const enriched = enrichResult?.data || null;
+
+    // 2. Собираем объект под твою таблицу
     const fullPlantData = {
       scientificName: plantData.scientificName,
       name: enriched?.name || plantData.scientificName.split(' ')[0],
-      image: 'https://t3.ftcdn.net/jpg/07/86/72/92/360_F_786729270_zRVnfyxvQgOIPrGYzCweGV1bi5X9fgSz.jpg', // ЗАГЛУШКА
-      color: enriched?.color || 'зеленый',
-      habitat: enriched?.habitat || 'садовое',
-      size: enriched?.size || 'среднее',
-      category: enriched?.category || 'декоративное',
-      categoryname: enriched?.categoryname || 'Универсальные',
-      description: buildDescription(enriched?.description, plantData.scientificName),
-      watering: enriched?.watering || 'умеренный',
-      light: enriched?.light || 'солнце/полутень',
-      temperature: enriched?.temperature || '10-25°C',
-      humidity: enriched?.humidity || 'средняя',
-      features: Array.isArray(enriched?.features) 
-        ? enriched.features 
-        : enriched?.features 
-        ? [enriched.features] 
-        : ['Авто-добавлено через распознавание'],
-      dangers: normalizeDangers(enriched?.dangers),
-      maintenance: enriched?.maintenance || 'Стандартный уход',
-      genus: genus || plantData.genus || enriched?.genus,
-      family: family || plantData.family || enriched?.family,
-      confidence: confidence || plantData.confidence || 0.95,
-      is_recognized: true  // КЛЮЧЕВОЕ - помечено как распознанное
+      image: null, // или URL, если хочешь
+      color: enriched?.color || null,
+      habitat: enriched?.habitat || null,
+      size: enriched?.size || null,
+      category: enriched?.category || null,
+      categoryName: enriched?.categoryName || enriched?.categoryname || null,
+      description: enriched?.description || null,
+      watering: enriched?.watering || null,
+      light: enriched?.light || null,
+      temperature: enriched?.temperature || '10-25C',
+      humidity: enriched?.humidity || null,
+      features: enriched?.features || null,
+      dangers: enriched?.dangers || null,
+      maintenance: enriched?.maintenance || null,
+      genus: genus || plantData.genus || enriched?.genus || null,
+      family: family || plantData.family || enriched?.family || null,
+      confidence: confidence ?? plantData.confidence ?? 0.95,
+      // флаги/служебные поля
+      isRecognized: true,
+      source: 'plantnet+groq',
+      verified: false,
+      image_url: null,
+      image_author: null,
+      image_attribution_url: null,
     };
 
-    // 4. Сохраняем в базу
-    const response = await fetch(`${API_BASE_URL}plants/recognize`, {
+    // 3. Сохраняем растение
+    const saveResponse = await fetch(`${API_BASE_URL}/plants/recognize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(fullPlantData),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+    if (!saveResponse.ok) {
+      const errorText = await saveResponse.text();
+      throw new Error(
+        `HTTP ${saveResponse.status} - ${saveResponse.statusText}: ${errorText}`
+      );
     }
 
-    const result = await response.json();
-    console.log('Plant saved:', result);
+    const result = await saveResponse.json();
+    console.log('Plant saved', result);
     return result;
   } catch (error) {
     console.error('Error adding plant', error);
     throw error;
   }
 };
-
 
 export default {
   fetchPlants,
