@@ -851,6 +851,55 @@ async function translatePlantWithGroq(scientificName) {
   }
 }
 
+// ========================
+// FEEDBACK TABLE INIT
+// ========================
+
+app.post('/api/feedback/init-db', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100),
+        email VARCHAR(100) NOT NULL,
+        phone VARCHAR(20),
+        message TEXT NOT NULL,
+        rating INT,
+        suggestions TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_feedback_email ON feedback(email);
+      CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at);
+    `);
+    console.log('✅ feedback table created');
+    res.json({ message: 'Feedback table initialized successfully' });
+  } catch (error) {
+    console.error('❌ Error creating feedback table:', error);
+    res.status(500).json({ error: 'Database initialization failed' });
+  }
+});
+
+// ========================
+// FEEDBACK GET ALL
+// ========================
+
+app.get('/api/feedback/all', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM feedback ORDER BY created_at DESC LIMIT 100'
+    );
+    res.json({ 
+      success: true, 
+      count: result.rows.length,
+      feedback: result.rows 
+    });
+  } catch (error) {
+    console.error('❌ Error fetching feedback:', error);
+    res.status(500).json({ error: 'Failed to fetch feedback' });
+  }
+});
+
+
 // POST /api/plants/enrich
 app.post('/api/plants/enrich', async (req, res) => {
   try {
@@ -1677,36 +1726,56 @@ app.get('/api/debug/plants-direct', async (req, res) => {
 
 app.post('/api/feedback', async (req, res) => {
   try {
-    const { name, email, message, rating, suggestions } = req.body;
+    const { name, email, phone, message, rating, suggestions } = req.body;
 
-    if (!message || message.trim().length < 10) {
-      return res.status(400).json({ 
-        error: 'Сообщение должно содержать минимум 10 символов' 
+    // Валидация
+    if (!email || !message) {
+      return res.status(400).json({
+        error: 'Email and message are required'
       });
     }
 
-    // Логируем обратную связь (в продакшене можно отправить на email или сохранить в БД)
-    console.log('📝 Новая обратная связь:');
-    console.log('  Имя:', name || 'Не указано');
-    console.log('  Email:', email || 'Не указан');
-    console.log('  Оценка:', rating || 'Не указана');
-    console.log('  Сообщение:', message);
-    if (suggestions) {
-      console.log('  Предложения:', suggestions);
+    if (message.trim().length < 10) {
+      return res.status(400).json({
+        error: 'Message must be at least 10 characters'
+      });
     }
 
-    // В продакшене здесь можно добавить отправку email через nodemailer или другой сервис
-    // Например: await sendEmail({ to: 'artsint@mail.ru', subject: 'Обратная связь FloroMate', text: ... });
+    // Проверка email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        error: 'Invalid email format'
+      });
+    }
 
-    res.json({ 
-      success: true, 
-      message: 'Спасибо за вашу обратную связь! Мы обязательно учтем ваши предложения.' 
+    // Вставка в БД
+    const result = await pool.query(
+      `INSERT INTO feedback (name, email, message, rating, suggestions)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, email, created_at`,
+      [name || null, email, message, rating ? parseInt(rating) : null || null, suggestions || null]
+    );
+    
+
+    console.log(`✅ Feedback received from: ${email}`);
+    console.log(`📝 Message: ${message.substring(0, 50)}...`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Feedback sent successfully',
+      feedback: result.rows[0]
     });
+
   } catch (error) {
-    console.error('❌ Ошибка обработки обратной связи:', error);
-    res.status(500).json({ error: 'Ошибка при отправке обратной связи' });
+    console.error('❌ Error saving feedback:', error);
+    res.status(500).json({
+      error: 'Failed to save feedback',
+      details: error.message
+    });
   }
 });
+
 
 // 🔍 ДЕБАГ
 app.get('/api/debug/models-check', (req, res) => {
