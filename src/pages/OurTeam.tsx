@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PixelTransition from '../components/PixelTransition/PixelTransition';
 import alinaPhoto from '../assets/team/alina.jpg';
 import dilyaraPhoto from '../assets/team/dilyara.jpg';
@@ -6,6 +6,10 @@ import artemPhoto from '../assets/team/artem.jpg';
 import './OurTeam.css';
 
 const OurTeam: React.FC = () => {
+  // Скроллим вверх при загрузке страницы
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
   const [feedbackForm, setFeedbackForm] = useState({
     name: '',
     email: '',
