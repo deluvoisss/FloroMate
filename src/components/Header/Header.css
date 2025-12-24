@@ -106,8 +106,22 @@
   transition: transform 0.2s ease;
 }
 
-.nav-link-logo:hover {
+.nav-link-logo:hover .coin {
   transform: scale(1.05);
+}
+
+.nav-link-logo:active .coin {
+  transform: scale(1.0);
+}
+
+/* Десктоп: скрываем мобильные кнопки */
+@media (min-width: 769px) {
+  .mobile-header-login,
+  .mobile-header-user,
+  .mobile-menu-toggle,
+  .mobile-menu {
+    display: none !important;
+  }
 }
 
 .header-nav {
@@ -117,6 +131,15 @@
   margin: 0;
   padding: 0;
   align-items: center;
+}
+
+.mobile-header-login,
+.mobile-header-user {
+  display: none !important;
+}
+
+.mobile-menu {
+  display: none;
 }
 
 .header-nav li {
@@ -283,6 +306,7 @@
   overflow: hidden;
   border: 5px solid #93A267;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  transform-style: preserve-3d;
 }
 
 .coin-front {
@@ -298,11 +322,18 @@
   width: 80%;
   height: auto;
   display: block;
+  position: relative;
+  z-index: 1;
 }
 
 .coin-back img {
   width: 110%;
+  height: 110%;
   object-fit: cover;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 @keyframes spinCoin {
@@ -316,6 +347,7 @@
 
 .coin.spinning {
   animation: spinCoin 3s ease-in-out forwards;
+  transform-style: preserve-3d;
 }
 
 /* Заблокированные элементы */
@@ -432,6 +464,108 @@
   background: transparent;
 }
 
+/* Мобильное меню */
+.mobile-menu-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  z-index: 1001;
+  position: relative;
+}
+
+.hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 24px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.hamburger span {
+  width: 100%;
+  height: 3px;
+  background: #FBFBFB;
+  border-radius: 3px;
+  transition: all 0.3s ease;
+  transform-origin: center;
+}
+
+.hamburger.active span:nth-child(1) {
+  transform: rotate(45deg) translate(8px, 8px);
+}
+
+.hamburger.active span:nth-child(2) {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+.hamburger.active span:nth-child(3) {
+  transform: rotate(-45deg) translate(8px, -8px);
+}
+
+.mobile-submenu {
+  display: none;
+  padding-left: 20px;
+  margin-top: 8px;
+  overflow: visible;
+}
+
+.mobile-submenu-item {
+  padding: 10px 15px;
+  color: #FBFBFB;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  transition: all 0.2s ease;
+  background: rgba(72, 89, 53, 0.2);
+}
+
+.mobile-submenu-item:hover {
+  background: rgba(147, 162, 103, 0.3);
+}
+
+.mobile-user-info {
+  padding: 12px 15px;
+  background: rgba(72, 89, 53, 0.3);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.mobile-user-info strong {
+  display: block;
+  color: #FBFBFB;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.mobile-user-info small {
+  display: block;
+  color: rgba(251, 251, 251, 0.7);
+  font-size: 13px;
+}
+
+.mobile-submenu-item.logout {
+  color: #ff6b6b;
+}
+
+.mobile-submenu-item.logout:hover {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.mobile-arrow {
+  float: right;
+  font-size: 12px;
+  margin-left: 8px;
+  transition: transform 0.2s ease;
+}
+
 /* Адаптация для мобильных */
 @media (max-width: 768px) {
   .lock-icon {
@@ -465,65 +599,198 @@
     padding: 8px 15px;
     font-size: 15px;
   }
+
+  .nav-item {
+    padding: 8px 15px;
+    font-size: 15px;
+  }
 }
 
 @media (max-width: 768px) {
+  .mobile-menu-toggle {
+    display: block;
+    order: 1;
+    flex: 0 0 auto;
+  }
+
   .header-container {
-    height: 60px;
-    padding: 0 10px;
+    height: auto;
+    min-height: 60px;
+    padding: 10px;
+    flex-wrap: wrap;
+    position: relative;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .nav-link-logo {
-    width: 80px;
-    height: 80px;
-    margin-top: 40px;
+    width: 70px;
+    height: 70px;
+    margin-top: 0;
+    order: 2;
+    flex: 0 0 auto;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
   }
 
-  .coin {
-    width: 80px;
-    height: 80px;
+  .nav-link-logo:hover {
+    transform: translateX(-50%) scale(1.05);
   }
 
-  .coin-face {
-    width: 80px;
-    height: 80px;
-    border: 4px solid #93A267;
+  .nav-link-logo:active {
+    transform: translateX(-50%);
   }
 
   .header-nav {
-    gap: 10px;
+    display: none;
   }
 
-  .nav-link {
-    padding: 6px 12px;
-    font-size: 0.9rem;
-  }
-
-  .login-button {
+  .mobile-header-login {
+    display: block !important;
+    order: 3;
+    flex: 0 0 auto;
     padding: 8px 16px;
     font-size: 14px;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1001;
   }
 
-  .popup-menu {
-    min-width: 200px;
-    margin-top: 10px;
-  }
-
-  .popup-menu a {
-    padding: 10px 16px;
+  .mobile-header-user {
+    display: block !important;
+    order: 3;
+    flex: 0 0 auto;
+    padding: 8px 16px;
     font-size: 14px;
+    color: #FBFBFB;
+    background: rgba(72, 89, 53, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1001;
+  }
+
+  .mobile-header-user:hover {
+    background: rgba(147, 162, 103, 0.2);
+  }
+
+
+  .coin {
+    width: 70px;
+    height: 70px;
+  }
+
+  .coin-face {
+    width: 70px;
+    height: 70px;
+    border: 3px solid #93A267;
+  }
+
+  .header-nav {
+    display: none;
+  }
+
+  .mobile-menu {
+    display: block;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #93A267 0%, #485935 100%);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    padding: 0;
+    z-index: 1000;
+    width: 100%;
+    list-style: none;
+    margin: 0;
+    flex-direction: column;
+  }
+
+  .mobile-menu.mobile-open {
+    max-height: 100vh;
+    padding: 20px 15px;
+    overflow-y: auto;
+  }
+
+  .mobile-menu li {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .mobile-menu-link,
+  .mobile-menu-item {
+    width: 100%;
+    padding: 12px 15px;
+    font-size: 16px;
+    text-align: left;
+    display: block;
+    border-radius: 8px;
+    color: #FBFBFB;
+    text-decoration: none;
+    background: rgba(72, 89, 53, 0.1);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .mobile-menu-link:hover,
+  .mobile-menu-item:hover {
+    background: rgba(147, 162, 103, 0.2);
+  }
+
+  .mobile-menu-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .mobile-submenu {
+    display: block !important;
+    margin-top: 8px;
+    padding-left: 0;
+    max-height: 500px;
+    overflow: visible;
+    animation: slideDown 0.3s ease;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      max-height: 0;
+    }
+    to {
+      opacity: 1;
+      max-height: 500px;
+    }
+  }
+
+  /* Скрываем hover эффекты на мобильных */
+  .nav-item-wrapper::after {
+    display: none;
   }
 }
 
 @media (max-width: 480px) {
   .header-container {
-    height: 50px;
+    min-height: 55px;
+    padding: 8px;
   }
 
   .nav-link-logo {
     width: 60px;
     height: 60px;
-    margin-top: 30px;
   }
 
   .coin {
@@ -537,17 +804,56 @@
     border: 3px solid #93A267;
   }
 
-  .header-nav {
-    gap: 8px;
+  .header-nav.mobile-open {
+    padding: 15px 10px;
   }
 
-  .nav-link {
-    padding: 5px 10px;
-    font-size: 0.8rem;
+  .nav-link,
+  .nav-item {
+    padding: 10px 12px;
+    font-size: 15px;
   }
 
   .login-button {
-    padding: 6px 12px;
-    font-size: 12px;
+    padding: 10px 16px;
+    font-size: 15px;
+  }
+
+  .mobile-menu-toggle {
+    padding: 6px;
+  }
+
+  .hamburger {
+    width: 22px;
+    height: 18px;
+  }
+}
+
+/* Планшеты в портретной ориентации */
+@media (max-width: 900px) and (min-width: 769px) {
+  .header-nav {
+    gap: 12px;
+  }
+
+  .nav-link,
+  .nav-item {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .nav-link-logo {
+    width: 90px;
+    height: 90px;
+    margin-top: 45px;
+  }
+
+  .coin {
+    width: 90px;
+    height: 90px;
+  }
+
+  .coin-face {
+    width: 90px;
+    height: 90px;
   }
 }

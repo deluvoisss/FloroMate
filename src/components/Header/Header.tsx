@@ -25,6 +25,8 @@ const Header: React.FC = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalType, setAuthModalType] = useState<'login' | 'register' | 'resetPassword'>('login');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [openMobileSubmenu, setOpenMobileSubmenu] = useState<string | null>(null);
   
   const user = useAppSelector((state) => state.auth.user);
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
@@ -88,6 +90,25 @@ const Header: React.FC = () => {
     };
   }, []);
 
+  // Закрытие мобильного меню при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isMobileMenuOpen && !target.closest('.header-container') && !target.closest('.mobile-menu-toggle')) {
+        setIsMobileMenuOpen(false);
+        setOpenMobileSubmenu(null);
+      }
+    };
+
+    if (isMobileMenuOpen) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [isMobileMenuOpen]);
+
 
   const isRecognitionActive = location.pathname === '/floromate/recognition1' ||
   location.pathname === '/floromate/recognition2';
@@ -121,6 +142,7 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
   const handleProtectedClick = (e: React.MouseEvent, path: string) => {
     navigate(path);
     setOpenMenu(null);
+    setIsMobileMenuOpen(false);
   };
   
   const handleCloseAuthModal = () => {
@@ -128,16 +150,49 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
     setAuthModalType('login');
   };
 
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+    setOpenMenu(null);
+    setOpenMobileSubmenu(null);
+  };
+
+  const handleMobileMenuClick = (path: string) => {
+    navigate(path);
+    setIsMobileMenuOpen(false);
+    setOpenMenu(null);
+    setOpenMobileSubmenu(null);
+  };
+
+  const toggleMobileSubmenu = (e: React.MouseEvent, menu: string) => {
+    e.stopPropagation();
+    setOpenMobileSubmenu(openMobileSubmenu === menu ? null : menu);
+  };
+
   return (
     <>
       <header className="header">
         <div className="header-container">
-          <ul className='header-nav'>
+          {/* Мобильная кнопка меню */}
+          <button 
+            className="mobile-menu-toggle"
+            onClick={toggleMobileMenu}
+            aria-label="Меню"
+          >
+            <span className={`hamburger ${isMobileMenuOpen ? 'active' : ''}`}>
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </button>
+
+          {/* Левая навигация (десктоп) */}
+          <ul className='header-nav header-nav-left'>
             {/* Справочник растений */}
             <li>
               <Link 
                 to="/encyclopedia" 
                 className={`nav-link ${location.pathname === '/encyclopedia' ? 'active' : ''}`}
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 Справочник растений
               </Link>
@@ -207,7 +262,12 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
           </ul>
 
           {/* Логотип в центре */}
-          <Link to="/mainpage" className="nav-link-logo" aria-label="Главная страница">
+          <Link 
+            to="/mainpage" 
+            className="nav-link-logo" 
+            aria-label="Главная страница"
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
             <div ref={coinRef} className="coin">
               <div className="coin-face coin-front">
                 <img src={logo} alt="Logo" />
@@ -218,12 +278,40 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
             </div>
           </Link>
 
+          {/* Кнопка Войти для мобильных (справа) */}
+          {!isAuthenticated && (
+            <button 
+              className="login-button mobile-header-login" 
+              onClick={() => {
+                handleOpenAuthModal('login');
+                setIsMobileMenuOpen(false);
+              }}
+            >
+              Войти
+            </button>
+          )}
+          {isAuthenticated && (
+            <div 
+              className="mobile-header-user"
+              onClick={(e) => {
+                if (isMobileMenuOpen) {
+                  toggleMobileSubmenu(e, 'user');
+                } else {
+                  handleMenuEnter('user');
+                }
+              }}
+            >
+              {user?.first_name || 'Профиль'}
+            </div>
+          )}
+
           {/* Правая навигация */}
           <ul className='header-nav'>
             <li>
               <Link
                 to="/ourteam"
                 className={`nav-link ${location.pathname === '/ourteam' ? 'active' : ''}`}
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 Наша команда
               </Link>
@@ -293,6 +381,131 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
             )}
 
             </li>
+          </ul>
+
+          {/* Мобильное выпадающее меню */}
+          <ul className={`mobile-menu ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+            <li>
+              <Link 
+                to="/encyclopedia" 
+                className="mobile-menu-link"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Справочник растений
+              </Link>
+            </li>
+
+            <li>
+              <div 
+                className="mobile-menu-item"
+                onClick={(e) => toggleMobileSubmenu(e, 'recognition')}
+              >
+                Узнать по фото
+                <span className="mobile-arrow">
+                  {openMobileSubmenu === 'recognition' ? '▼' : '▶'}
+                </span>
+              </div>
+              {isMobileMenuOpen && openMobileSubmenu === 'recognition' && (
+                <div className="mobile-submenu">
+                  <div 
+                    onClick={() => handleMobileMenuClick('recognition1')} 
+                    className="mobile-submenu-item"
+                  >
+                    Определить растение
+                  </div>
+                  <div 
+                    onClick={() => handleMobileMenuClick('recognition2')} 
+                    className="mobile-submenu-item"
+                  >
+                    Определить болезнь
+                  </div>
+                </div>
+              )}
+            </li>
+
+            <li>
+              <div 
+                className="mobile-menu-item"
+                onClick={(e) => toggleMobileSubmenu(e, 'landscape')}
+              >
+                Мастерская ландшафта
+                <span className="mobile-arrow">
+                  {openMobileSubmenu === 'landscape' ? '▼' : '▶'}
+                </span>
+              </div>
+              {isMobileMenuOpen && openMobileSubmenu === 'landscape' && (
+                <div className="mobile-submenu">
+                  <div 
+                    onClick={() => handleMobileMenuClick('/landscapedesign')} 
+                    className="mobile-submenu-item"
+                  >
+                    Ландшафтный дизайн
+                  </div>
+                  <div 
+                    onClick={() => handleMobileMenuClick('/konstructor')} 
+                    className="mobile-submenu-item"
+                  >
+                    Конструктор участка
+                  </div>
+                </div>
+              )}
+            </li>
+
+            <li>
+              <Link
+                to="/ourteam"
+                className="mobile-menu-link"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Наша команда
+              </Link>
+            </li>
+
+            <li>
+              <div 
+                className="mobile-menu-item"
+                onClick={() => handleMobileMenuClick('/privategarden')}
+              >
+                Личный сад
+              </div>
+            </li>
+
+            <li>
+              <div 
+                className="mobile-menu-item"
+                onClick={() => handleMobileMenuClick('/subscription')}
+              >
+                Премиум-доступ
+              </div>
+            </li>
+
+            {isAuthenticated && (
+              <li>
+                <div 
+                  className="mobile-menu-item"
+                  onClick={(e) => toggleMobileSubmenu(e, 'user')}
+                >
+                  {user?.first_name || 'Профиль'}
+                  <span className="mobile-arrow">
+                    {openMobileSubmenu === 'user' ? '▼' : '▶'}
+                  </span>
+                </div>
+                {isMobileMenuOpen && openMobileSubmenu === 'user' && (
+                  <div className="mobile-submenu">
+                    <div className="mobile-user-info">
+                      <strong>{user?.username}</strong>
+                      <small>{user?.phone}</small>
+                    </div>
+                    <div className="mobile-submenu-item" onClick={handleResetPassword}>
+                      Сменить пароль
+                    </div>
+                    <div className="mobile-submenu-item logout" onClick={handleLogout}>
+                      Выйти
+                    </div>
+                  </div>
+                )}
+              </li>
+            )}
           </ul>
         </div>
       </header>
