@@ -3,11 +3,12 @@
 /* eslint-disable react/display-name */
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-
+import { Provider } from 'react-redux'
+import { store } from './store/store'
 import App from './app'
 import './App.css'
 
-export default () => <App/>
+export default () => <App />
 
 let rootElement: ReactDOM.Root
 
@@ -16,18 +17,27 @@ export const mount = (Component: any, element: HTMLElement | null = document.get
     console.error('❌ Ошибка: контейнер #app не найден!');
     return;
   }
-  
+
   console.log('🚀 Монтируем приложение FloroMate в контейнер...');
   
+  // ✅ Оборачиваем в Redux Provider
   rootElement = ReactDOM.createRoot(element)
-  rootElement.render(<Component/>)
+  rootElement.render(
+    <Provider store={store}>
+      <Component />
+    </Provider>
+  )
 
   // @ts-ignore
   if(module.hot) {
     // @ts-ignore
     module.hot.accept('./app', () => {
       console.log('♻️ HMR: обновляем компоненты...');
-      rootElement.render(<Component/>)
+      rootElement.render(
+        <Provider store={store}>
+          <Component />
+        </Provider>
+      )
     })
   }
 }
