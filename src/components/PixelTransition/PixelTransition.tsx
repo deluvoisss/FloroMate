@@ -48,10 +48,15 @@ const PixelTransition: React.FC<PixelTransitionProps> = ({
         pixel.style.backgroundColor = pixelColor;
 
         const size = 100 / gridSize;
-        pixel.style.width = `${size}%`;
-        pixel.style.height = `${size}%`;
-        pixel.style.left = `${col * size}%`;
-        pixel.style.top = `${row * size}%`;
+        // Увеличиваем размер пикселей, чтобы они перекрывались и не было зазоров
+        // Используем большее перекрытие для устранения горизонтальных и вертикальных полос
+        const pixelSize = size + 0.2;
+        pixel.style.width = `${pixelSize}%`;
+        pixel.style.height = `${pixelSize}%`;
+        // Смещаем позицию немного назад, чтобы перекрытие было равномерным
+        const offset = -0.1;
+        pixel.style.left = `calc(${col * size}% + ${offset}%)`;
+        pixel.style.top = `calc(${row * size}% + ${offset}%)`;
         pixelGridEl.appendChild(pixel);
       }
     }
