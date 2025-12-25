@@ -64,12 +64,18 @@ const OurTeam: React.FC = () => {
     setSubmitStatus(null);
 
     try {
-      const response = await fetch('/api/feedback', {
+      const response = await fetch('http://localhost:3001/api/feedback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(feedbackForm),
+        body: JSON.stringify({
+          name: feedbackForm.name || null,
+          email: feedbackForm.email || null,
+          message: feedbackForm.message,
+          rating: feedbackForm.rating ? parseInt(feedbackForm.rating) : null, // ✅
+          suggestions: feedbackForm.suggestions || null,
+        }),
       });
 
       const data = await response.json();
