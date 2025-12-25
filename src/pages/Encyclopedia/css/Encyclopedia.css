@@ -10,7 +10,7 @@
   position: fixed;
   top: 80px;
   left: 10px;
-  z-index: 999;
+  z-index: 90;
   padding: 10px 16px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;

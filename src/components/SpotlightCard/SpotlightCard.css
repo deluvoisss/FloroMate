@@ -1,0 +1,48 @@
+.card-spotlight {
+  position: relative;
+  border-radius: 1.5rem;
+  border: 1px solid #222;
+  background-color: #111;
+  padding: 2rem;
+  overflow: hidden;
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+  --spotlight-color: rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+/* Переопределение для subscription карточек */
+.card-spotlight.subscription-card {
+  border: 2px solid #e2e8f0;
+  background-color: #ffffff;
+  padding: 32px;
+}
+
+.card-spotlight.subscription-card-free {
+  background-color: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.card-spotlight.subscription-card-highlight {
+  border: 2px solid #e2e8f0;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 50%, #f1f3f5 100%);
+}
+
+.card-spotlight::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at var(--mouse-x) var(--mouse-y), var(--spotlight-color), transparent 80%);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+.card-spotlight:hover::before,
+.card-spotlight:focus-within::before {
+  opacity: 0.6;
+}
+
