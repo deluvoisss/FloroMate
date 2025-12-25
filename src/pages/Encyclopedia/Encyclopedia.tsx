@@ -15,7 +15,10 @@ const Encyclopedia: React.FC = () => {
     habitats: [],
     sizes: []
   });
+
   const [availableColors, setAvailableColors] = useState<string[]>([]); // НОВОЕ
+  const [availableHabitats, setAvailableHabitats] = useState<string[]>([]);
+  const [availableSizes, setAvailableSizes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -34,6 +37,8 @@ const Encyclopedia: React.FC = () => {
         setPlants(searchResult || []);
         setTotalPages(1);
         setAvailableColors([...new Set((searchResult || []).map((p: Plant) => p.color).filter(Boolean))]);
+        setAvailableHabitats([...new Set((searchResult || []).map((p: Plant) => p.habitat).filter(Boolean))]);
+      setAvailableSizes([...new Set((searchResult || []).map((p: Plant) => p.size).filter(Boolean))]);
       } else {
         const result = await plantApiService.fetchPlants(filters, currentPage);
         console.log('🌿 API plants:', result.plants);
@@ -41,6 +46,8 @@ const Encyclopedia: React.FC = () => {
         setPlants(result.plants || []);
         setTotalPages(result.totalPages || 1);
         setAvailableColors([...new Set((result.plants || []).map((p: Plant) => p.color).filter(Boolean))]);
+        setAvailableHabitats([...new Set((result.plants || []).map((p: Plant) => p.habitat).filter(Boolean))]);
+        setAvailableSizes([...new Set((result.plants || []).map((p: Plant) => p.size).filter(Boolean))]);
       }
     } catch (err) {
       console.error('❌ Error loading plants:', err);
@@ -108,6 +115,8 @@ const Encyclopedia: React.FC = () => {
       <FilterSidebar
         filters={filters}
         availableColors={availableColors} // ПЕРЕДАЕМ динамические цвета
+        availableHabitats={availableHabitats}  
+        availableSizes={availableSizes} 
         onFilterChange={handleFilterChange}
         onReset={resetFilters}
         isOpen={sidebarOpen}
