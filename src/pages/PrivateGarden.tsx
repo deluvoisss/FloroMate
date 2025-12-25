@@ -148,30 +148,31 @@ const PersonalGarden: React.FC = () => {
         const baseUrl = 'http://localhost:3001';
         
         console.log('📡 Загружаем данные для userId:', userId);
-  
-        // ✅ ВСЕ запросы параллельно
-        const [tasksRes, wateringRes, fertilizerRes, diaryRes, harvestRes] = 
+        
+        // ✅ ВСЕ запросы параллельно (ДОБАВЬ communityRes!)
+        const [tasksRes, wateringRes, fertilizerRes, diaryRes, harvestRes, communityRes] =
           await Promise.all([
             fetch(`${baseUrl}/api/garden/tasks/${userId}`),
             fetch(`${baseUrl}/api/garden/watering/${userId}`),
             fetch(`${baseUrl}/api/garden/fertilizer/${userId}`),
             fetch(`${baseUrl}/api/garden/diary/${userId}`),
             fetch(`${baseUrl}/api/garden/harvest/${userId}`),
+            fetch(`${baseUrl}/api/community/posts`), // ← НОВОЕ!
           ]);
-  
+        
         console.log('✅ Все запросы выполнены');
         console.log('📊 tasksRes.status:', tasksRes.status);
         
         // Задачи
         if (tasksRes.ok) {
           const tasksData = await tasksRes.json();
-          const transformed = tasksData.map(transformTaskFromDB);  // ✅ ПРАВИЛЬНО
+          const transformed = tasksData.map(transformTaskFromDB);
           setTasks(transformed);
           console.log('📋 Загружено задач:', tasksData.length);
         } else {
           console.error('❌ Ошибка загрузки задач:', tasksRes.status);
         }
-          
+        
         // Полив
         if (wateringRes.ok) {
           const wateringData = await wateringRes.json();
@@ -199,15 +200,37 @@ const PersonalGarden: React.FC = () => {
           console.log('🌾 Загружено записей урожая:', harvestData.length);
           setHarvestHistory(harvestData);
         }
-  
+        
+        // ✅ Сообщество (НОВОЕ!)
+        if (communityRes.ok) {
+          const communityData = await communityRes.json();
+          console.log('👥 Загружено постов сообщества:', communityData.length);
+          
+          // Преобразуй формат для фронта
+          const formattedPosts = communityData.map((post: any) => ({
+            id: post.id.toString(),
+            title: post.title,
+            description: post.description,
+            author: post.author,
+            authorInitial: post.author.charAt(0).toUpperCase(),
+            date: new Date(post.created_at).toISOString().split('T')[0],
+            tags: post.tags || [],
+            category: post.category,
+            likes: post.likes || 0,
+            comments: [],
+            userLiked: false,
+          }));
+          
+          setCommunityPosts(formattedPosts);
+        }
+        
       } catch (error) {
         console.error('❌ Ошибка загрузки данных:', error);
       }
     };
-  
+    
     loadData();
   }, []);
-  
   
 
   // ========================
@@ -635,31 +658,75 @@ const PersonalGarden: React.FC = () => {
   // COMMUNITY HANDLERS
   // ========================
 
-  const addCommunityPost = () => {
-    if (newCommunityPost.title && newCommunityPost.description) {
-      const post: Post = {
-        id: Date.now().toString(),
+  const addCommunityPost = async () => {
+    if (!newCommunityPost.title || !newCommunityPost.description) {
+      alert('⚠️ Заполните название и описание');
+      return;
+    }
+  
+    try {
+      const firstName = localStorage.getItem('firstName') || '';
+      const lastName = localStorage.getItem('lastName') || '';
+      const username = localStorage.getItem('username') || 'Аноним';
+      
+      // Используем полное имя или username
+      const authorName = (firstName && lastName) 
+        ? `${firstName} ${lastName}` 
+        : username;
+  
+      const payload = {
         title: newCommunityPost.title,
         description: newCommunityPost.description,
-        author: currentUser,
-        authorInitial: currentUserInitial,
-        date: new Date().toISOString().split('T')[0],
+        author: authorName,
+        category: communityTab,
         tags: (newCommunityPost.tags || '')
           .split(',')
           .map((t) => t.trim())
           .filter(Boolean),
-        category: communityTab as 'tips' | 'achievements',
-        likes: 0,
+      };
+  
+      console.log('📝 Отправляем пост:', payload); // ← отладка
+  
+      const response = await fetch('http://localhost:3001/api/community/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+  
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        alert(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+        return;
+      }
+  
+      const savedPost = await response.json();
+      
+      const newPost: Post = {
+        id: savedPost.id.toString(),
+        title: savedPost.title,
+        description: savedPost.description,
+        author: savedPost.author,
+        authorInitial: savedPost.author.charAt(0).toUpperCase(),
+        date: new Date(savedPost.created_at).toISOString().split('T')[0],
+        tags: savedPost.tags || [],
+        category: savedPost.category,
+        likes: savedPost.likes || 0,
         userLiked: false,
         comments: [],
       };
-
-      setCommunityPosts([post, ...communityPosts]);
+  
+      setCommunityPosts([newPost, ...communityPosts]);
       setNewCommunityPost({ title: '', description: '', tags: '' });
       setShowCommunityPostModal(false);
-      console.log('✅ Пост добавлен в сообщество');
+      console.log('✅ Пост опубликован в сообществе');
+  
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+      alert(`❌ Ошибка: ${(error as Error).message}`);
     }
   };
+  
+  
 
   // ========================
   // COMPUTED VALUES

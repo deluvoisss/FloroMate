@@ -2034,6 +2034,102 @@ app.delete('/api/garden/harvest/:id', async (req, res) => {
   }
 });
 
+app.get('/api/community/posts', async (req, res) => {
+  try {
+    const { category } = req.query;
+    
+    let query = 'SELECT * FROM community_posts';
+    const params = [];
+    
+    if (category && (category === 'tips' || category === 'achievements')) {
+      query += ' WHERE category = $1';
+      params.push(category);
+    }
+    
+    query += ' ORDER BY created_at DESC LIMIT 50';
+    
+    const result = await pool.query(query, params);
+    
+    console.log(`📰 Community posts loaded: ${result.rows.length} (category: ${category || 'all'})`);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Error loading community posts:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/community/posts - Создать новый пост
+app.post('/api/community/posts', async (req, res) => {
+  try {
+    const { title, description, author, category, tags } = req.body;
+    
+    if (!title || !description || !author || !category) {
+      return res.status(400).json({ error: 'Title, description, author and category are required' });
+    }
+    
+    if (category !== 'tips' && category !== 'achievements') {
+      return res.status(400).json({ error: 'Category must be "tips" or "achievements"' });
+    }
+    
+    const result = await pool.query(
+      `INSERT INTO community_posts (title, description, author, category, tags)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [title, description, author, category, tags || []]
+    );
+    
+    console.log(`✅ Community post created: "${title}" by ${author}`);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Error creating community post:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/community/posts/:id/like - Лайкнуть пост
+app.put('/api/community/posts/:id/like', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      `UPDATE community_posts SET likes = likes + 1 WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    
+    console.log(`👍 Post ${id} liked (total: ${result.rows[0].likes})`);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Error liking post:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/community/posts/:id - Удалить пост
+app.delete('/api/community/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      `DELETE FROM community_posts WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    
+    console.log(`🗑️ Post ${id} deleted`);
+    res.json({ message: 'Post deleted successfully' });
+  } catch (error) {
+    console.error('❌ Error deleting post:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // ========================
 // START SERVER
