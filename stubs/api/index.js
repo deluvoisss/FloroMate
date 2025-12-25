@@ -854,51 +854,83 @@ async function translatePlantWithGroq(scientificName) {
 // ========================
 // FEEDBACK TABLE INIT
 // ========================
-
-app.post('/api/feedback/init-db', async (req, res) => {
+app.post('/api/feedback/init', async (req, res) => {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS feedback (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(100),
-        email VARCHAR(100) NOT NULL,
-        phone VARCHAR(20),
-        message TEXT NOT NULL,
-        rating INT,
-        suggestions TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        author_name VARCHAR(100) NOT NULL,
+        author_role VARCHAR(100) NOT NULL,
+        comment TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT true
       );
-      CREATE INDEX IF NOT EXISTS idx_feedback_email ON feedback(email);
-      CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at);
+
+      CREATE INDEX IF NOT EXISTS idx_feedback_active ON feedback(is_active);
     `);
+
     console.log('✅ feedback table created');
     res.json({ message: 'Feedback table initialized successfully' });
   } catch (error) {
     console.error('❌ Error creating feedback table:', error);
-    res.status(500).json({ error: 'Database initialization failed' });
+    res.status(500).json({ error: 'Feedback table initialization failed' });
   }
 });
 
-// ========================
-// FEEDBACK GET ALL
-// ========================
-
-app.get('/api/feedback/all', async (req, res) => {
+// Получить все отзывы (для совместимости)
+app.get('/api/feedback', async (req, res) => {
   try {
+    console.log('📋 Запрос к /api/feedback');
+    
     const result = await pool.query(
-      'SELECT * FROM feedback ORDER BY created_at DESC LIMIT 100'
+      `SELECT id, author_name AS authorname, author_role AS authorrole, 
+              comment, created_at AS createdat 
+       FROM feedback 
+       ORDER BY created_at DESC`
     );
-    res.json({ 
-      success: true, 
-      count: result.rows.length,
-      feedback: result.rows 
-    });
+
+    console.log(`✅ Получено ${result.rows.length} отзывов`);
+
+    const feedbacks = result.rows.map(row => ({
+      id: row.id,
+      authorName: row.authorname,
+      authorRole: row.authorrole,
+      comment: row.comment,
+      createdAt: row.createdat
+    }));
+
+    res.json(feedbacks);
   } catch (error) {
-    console.error('❌ Error fetching feedback:', error);
-    res.status(500).json({ error: 'Failed to fetch feedback' });
+    console.error('❌ Ошибка получения отзывов:', error.message);
+    res.status(500).json({ 
+      error: 'Не удалось получить отзывы',
+      details: error.message 
+    });
   }
 });
 
+
+// Удалить отзыв (soft delete)
+app.delete('/api/feedback/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'UPDATE feedback SET is_active = false WHERE id = $1 RETURNING id',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Feedback not found' });
+    }
+
+    console.log(`✅ Feedback ${id} deleted`);
+    res.json({ message: 'Feedback deleted successfully' });
+  } catch (error) {
+    console.error('❌ Error deleting feedback:', error);
+    res.status(500).json({ error: 'Failed to delete feedback' });
+  }
+});
 
 // POST /api/plants/enrich
 app.post('/api/plants/enrich', async (req, res) => {

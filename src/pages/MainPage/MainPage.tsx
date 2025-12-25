@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import Feedback from '../../components/Feedback/FeedBack';
 import './MainPage.css';
 
 const MainPage: React.FC = () => {
@@ -136,35 +137,7 @@ const MainPage: React.FC = () => {
       </section>
 
       {/* Testimonials Section */}
-      <section className="testimonials">
-        <h2 className="section-title">Отзывы пользователей</h2>
-        <div className="testimonials-grid">
-          <div className="testimonial-card">
-            <div className="stars">⭐⭐⭐⭐⭐</div>
-            <p className="testimonial-text">
-              "FloroMate помог мне определить редкое растение из отпуска! 
-              Очень точное распознавание."
-            </p>
-            <p className="testimonial-author">— Елена, садовод</p>
-          </div>
-          <div className="testimonial-card">
-            <div className="stars">⭐⭐⭐⭐⭐</div>
-            <p className="testimonial-text">
-              "Спас своё любимое растение благодаря диагностике болезней. 
-              Рекомендации были очень полезны!"
-            </p>
-            <p className="testimonial-author">— Максим, любитель кактусов</p>
-          </div>
-          <div className="testimonial-card">
-            <div className="stars">⭐⭐⭐⭐⭐</div>
-            <p className="testimonial-text">
-              "Конструктор ландшафта помог спланировать мой сад мечты. 
-              Результат превзошёл ожидания!"
-            </p>
-            <p className="testimonial-author">— Анна, ландшафтный дизайнер</p>
-          </div>
-        </div>
-      </section>
+      <Feedback />
 
       {/* Footer CTA */}
       <section className="footer-cta">
