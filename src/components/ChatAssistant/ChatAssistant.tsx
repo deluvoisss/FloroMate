@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useAppSelector } from '../../store/hooks';
 import './ChatAssistant.css';
 
 interface Message {
@@ -18,6 +19,11 @@ const ChatAssistant: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // ← ДОБАВИТЬ: Получаем данные пользователя
+  const user = useAppSelector((state) => state.auth.user);
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+  const userSubscription = user?.subscription;
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -29,6 +35,24 @@ const ChatAssistant: React.FC = () => {
   const sendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
 
+    // ← ДОБАВИТЬ: Проверка авторизации
+    if (!isAuthenticated) {
+      setMessages([...messages, {
+        role: 'assistant',
+        content: '🔒 Пожалуйста, войдите в систему, чтобы использовать AI-ассистента.'
+      }]);
+      return;
+    }
+
+    // ← ДОБАВИТЬ: Проверка лимита запросов
+    if (userSubscription && userSubscription.usedRequests >= userSubscription.dailyRequests) {
+      setMessages([...messages, {
+        role: 'assistant',
+        content: `🚫 Достигнут лимит запросов на сегодня (${userSubscription.dailyRequests}). Обновите подписку для продолжения.`
+      }]);
+      return;
+    }
+
     const userMessage = inputValue.trim();
     setInputValue('');
 
@@ -37,14 +61,14 @@ const ChatAssistant: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // ОБНОВЛЁННЫЙ АДРЕС - теперь один сервер на порту 3001
       const response = await fetch('http://localhost:3001/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: newMessages
+          messages: newMessages,
+          userId: user?.id // ← ДОБАВИТЬ: отправляем userId для учета запросов
         })
       });
 
@@ -58,6 +82,7 @@ const ChatAssistant: React.FC = () => {
         role: 'assistant',
         content: data.response
       }]);
+
     } catch (error) {
       console.error('Ошибка:', error);
       setMessages([...newMessages, {
@@ -87,21 +112,29 @@ const ChatAssistant: React.FC = () => {
     <>
       {!isOpen && (
         <button
-          className="chat-toggle-btn"
+          className="chat-assistant-button"
           onClick={() => setIsOpen(true)}
           aria-label="Открыть чат"
         >
-          AI
+          🤖 AI
         </button>
       )}
 
       {isOpen && (
-        <div className="chat-container">
-          <div className="chat-header">
-            <h3>Растительный AI</h3>
-            <span className="status-indicator">● Онлайн</span>
+        <div className="chat-assistant-container">
+          <div className="chat-assistant-header">
+            <div>
+              <div className="chat-assistant-title">Растительный AI</div>
+              <div className="chat-assistant-status">● Онлайн</div>
+              {/* ← ДОБАВИТЬ: Показываем лимит запросов */}
+              {isAuthenticated && userSubscription && (
+                <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '4px' }}>
+                  Запросов: {userSubscription.usedRequests}/{userSubscription.dailyRequests}
+                </div>
+              )}
+            </div>
             <button
-              className="chat-close-btn"
+              className="chat-assistant-close"
               onClick={() => setIsOpen(false)}
               aria-label="Закрыть"
             >
@@ -109,47 +142,45 @@ const ChatAssistant: React.FC = () => {
             </button>
           </div>
 
-          <div className="chat-messages">
+          <div className="chat-assistant-messages">
             {messages.map((msg, index) => (
-              <div key={index} className={`message message-${msg.role}`}>
-                <span className="message-icon">
+              <div key={index} className={`chat-message chat-message-${msg.role}`}>
+                <div className="chat-message-avatar">
                   {msg.role === 'user' ? '👤' : '🤖'}
-                </span>
-                <div className="message-content">{msg.content}</div>
+                </div>
+                <div className="chat-message-content">{msg.content}</div>
               </div>
             ))}
 
             {isLoading && (
-              <div className="message message-assistant">
-                <span className="message-icon">🤖</span>
-                <div className="message-content loading">
-                  <span></span><span></span><span></span>
-                </div>
+              <div className="chat-message chat-message-assistant">
+                <div className="chat-message-avatar">🤖</div>
+                <div className="chat-message-loading">...</div>
+              </div>
+            )}
+
+            {messages.length === 1 && (
+              <div className="chat-quick-questions">
+                <div className="chat-quick-title">Популярные вопросы:</div>
+                {quickQuestions.map((question, index) => (
+                  <button
+                    key={index}
+                    className="chat-quick-question"
+                    onClick={() => {
+                      setInputValue(question);
+                      setTimeout(() => sendMessage(), 100);
+                    }}
+                  >
+                    {question}
+                  </button>
+                ))}
               </div>
             )}
 
             <div ref={messagesEndRef} />
           </div>
 
-          {messages.length === 1 && (
-            <div className="quick-questions">
-              <p>Популярные вопросы:</p>
-              {quickQuestions.map((question, index) => (
-                <button
-                  key={index}
-                  className="quick-question-btn"
-                  onClick={() => {
-                    setInputValue(question);
-                    setTimeout(() => sendMessage(), 100);
-                  }}
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="chat-input-area">
+          <div className="chat-assistant-input-container">
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
@@ -160,15 +191,15 @@ const ChatAssistant: React.FC = () => {
               className="chat-input"
             />
             <button
+              className="chat-send-button"
               onClick={sendMessage}
               disabled={isLoading || !inputValue.trim()}
-              className="send-btn"
             >
-              📤
+              ➤
             </button>
           </div>
 
-          <p className="powered-by">Powered by GigaChat AI</p>
+          <div className="chat-assistant-footer">Powered by GigaChat AI</div>
         </div>
       )}
     </>
