@@ -106,6 +106,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialType = 'l
         }
 
         const data = await response.json();
+        localStorage.setItem('userId', data.user.id.toString());
         dispatch(setUser(data.user));
         setSuccess('Вход выполнен успешно!');
         setTimeout(() => {

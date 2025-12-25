@@ -1789,6 +1789,251 @@ app.get('/api/debug/models-check', (req, res) => {
 });
 
 // ========================
+// GARDEN ENDPOINTS
+// ========================
+
+// Инициализация таблицы garden_diary
+app.post('/api/garden/init-db', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS garden_diary (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        date DATE DEFAULT CURRENT_DATE,
+        title VARCHAR(255) NOT NULL,
+        text TEXT,
+        photo_url VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_garden_diary_user_id ON garden_diary(user_id);
+      CREATE INDEX IF NOT EXISTS idx_garden_diary_date ON garden_diary(date);
+    `);
+    res.json({ message: 'Garden diary table initialized successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Database initialization failed' });
+  }
+});
+
+
+// Задачи
+app.post('/api/garden/tasks', async (req, res) => {
+  try {
+    const { userId, title, dueDate, urgent, description } = req.body;
+    const result = await pool.query(
+      `INSERT INTO garden_tasks (user_id, title, due_date, urgent, description)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [userId, title, dueDate, urgent || false, description || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Ошибка:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/garden/tasks/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_tasks WHERE user_id = $1 ORDER BY due_date ASC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/garden/tasks/:taskId', async (req, res) => {
+  try {
+    const { completed } = req.body;
+    const result = await pool.query(
+      `UPDATE garden_tasks SET completed = $1 WHERE id = $2 RETURNING *`,
+      [completed, req.params.taskId]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/tasks/:taskId', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_tasks WHERE id = $1`, [req.params.taskId]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Полив
+app.post('/api/garden/watering', async (req, res) => {
+  try {
+    const { userId, plant, frequency, amount, description } = req.body;
+    const result = await pool.query(
+      `INSERT INTO garden_watering (user_id, plant, frequency, amount, description)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [userId, plant, frequency, amount || null, description || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/garden/watering/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_watering WHERE user_id = $1 ORDER BY created_at DESC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/watering/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_watering WHERE id = $1`, [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Удобрения
+app.post('/api/garden/fertilizer', async (req, res) => {
+  try {
+    const { userId, name, type, schedule, amount, description } = req.body;
+    const result = await pool.query(
+      `INSERT INTO garden_fertilizer (user_id, name, type, schedule, amount, description)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [userId, name, type || 'минеральное', schedule, amount || null, description || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/garden/fertilizer/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_fertilizer WHERE user_id = $1 ORDER BY created_at DESC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/fertilizer/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_fertilizer WHERE id = $1`, [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Дневник
+app.post('/api/garden/diary', async (req, res) => {
+  try {
+    const { userId, title, text, date } = req.body;
+
+    // ✅ Проверьте, что userId существует в users
+    const userCheck = await pool.query(
+      'SELECT id FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(400).json({ 
+        error: 'User not found', 
+        userId: userId 
+      });
+    }
+
+    // Только после проверки вставляйте запись
+    const result = await pool.query(
+      `INSERT INTO garden_diary (user_id, title, text, date) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING *`,
+      [userId, title, text, date]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error saving diary:', error);
+    res.status(500).json({ 
+      error: error.message,
+      code: error.code 
+    });
+  }
+});
+
+app.get('/api/garden/diary/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_diary WHERE user_id = $1 ORDER BY date DESC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/diary/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_diary WHERE id = $1`, [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Урожай
+app.post('/api/garden/harvest', async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
+    const result = await pool.query(
+      `INSERT INTO garden_harvest (user_id, amount)
+       VALUES ($1, $2) RETURNING *`,
+      [userId, parseFloat(amount)]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/garden/harvest/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_harvest WHERE user_id = $1 ORDER BY date DESC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/harvest/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_harvest WHERE id = $1`, [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ========================
 // START SERVER
 // ========================
 
