@@ -178,7 +178,6 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
                     }`}
                     onClick={() => onFilterChange('colors', option.value)}
                   >
-                    <span className="option-icon">{option.icon}</span>
                     <span>{option.label}</span>
                   </div>
                 ))}
@@ -202,7 +201,6 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
                     }`}
                     onClick={() => onFilterChange('habitats', option.value)}
                   >
-                    <span className="option-icon">{option.icon}</span>
                     <span>{option.label}</span>
                   </div>
                 ))}
@@ -226,7 +224,6 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
                     }`}
                     onClick={() => onFilterChange('sizes', option.value)}
                   >
-                    <span className="option-icon">{option.prefix}</span>
                     <span>{option.label}</span>
                   </div>
                 ))}
