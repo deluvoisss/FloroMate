@@ -59,6 +59,15 @@ interface HarvestEntry {
   amount: number;
 }
 
+const transformTaskFromDB = (dbTask: any): Task => ({
+  id: dbTask.id,
+  title: dbTask.title,
+  dueDate: dbTask.due_date,      // ← ВОТ КЛЮЧЕВАЯ СТРОКА!
+  completed: Boolean(dbTask.completed),
+  urgent: Boolean(dbTask.urgent),
+  description: dbTask.description || ''
+});
+
 const PersonalGarden: React.FC = () => {
   // ========================
   // STATE - MODALS
@@ -127,25 +136,20 @@ const PersonalGarden: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // ✅ Проверка userId
         const storedUserId = localStorage.getItem('userId');
+        console.log('🔍 Загрузка данных, userId:', storedUserId);
         
         if (!storedUserId) {
-          console.warn('⚠️ userId не найден - пользователь не авторизован');
+          console.warn('⚠️ userId не найден');
           return;
         }
-  
-        // ✅ Парсинг и валидация
+        
         const userId = parseInt(storedUserId, 10);
-        if (isNaN(userId) || userId <= 0) {
-          console.error('❌ Невалидный userId:', storedUserId);
-          localStorage.removeItem('userId');
-          return;
-        }
-  
         const baseUrl = 'http://localhost:3001';
-        console.log('📊 Загружаем данные для userId:', userId);
+        
+        console.log('📡 Загружаем данные для userId:', userId);
   
+        // ✅ ВСЕ запросы параллельно
         const [tasksRes, wateringRes, fertilizerRes, diaryRes, harvestRes] = 
           await Promise.all([
             fetch(`${baseUrl}/api/garden/tasks/${userId}`),
@@ -155,11 +159,47 @@ const PersonalGarden: React.FC = () => {
             fetch(`${baseUrl}/api/garden/harvest/${userId}`),
           ]);
   
-        if (tasksRes.ok) setTasks(await tasksRes.json());
-        if (wateringRes.ok) setWateringSchedule(await wateringRes.json());
-        if (fertilizerRes.ok) setFertilizerSchedule(await fertilizerRes.json());
-        if (diaryRes.ok) setDiaryEntries(await diaryRes.json());
-        if (harvestRes.ok) setHarvestHistory(await harvestRes.json());
+        console.log('✅ Все запросы выполнены');
+        console.log('📊 tasksRes.status:', tasksRes.status);
+        
+        // Задачи
+        if (tasksRes.ok) {
+          const tasksData = await tasksRes.json();
+          const transformed = tasksData.map(transformTaskFromDB);  // ✅ ПРАВИЛЬНО
+          setTasks(transformed);
+          console.log('📋 Загружено задач:', tasksData.length);
+          setTasks(tasksData);
+        } else {
+          console.error('❌ Ошибка загрузки задач:', tasksRes.status);
+        }
+          
+        // Полив
+        if (wateringRes.ok) {
+          const wateringData = await wateringRes.json();
+          console.log('💧 Загружено расписаний полива:', wateringData.length);
+          setWateringSchedule(wateringData);
+        }
+        
+        // Удобрения
+        if (fertilizerRes.ok) {
+          const fertilizerData = await fertilizerRes.json();
+          console.log('🧪 Загружено удобрений:', fertilizerData.length);
+          setFertilizerSchedule(fertilizerData);
+        }
+        
+        // Дневник
+        if (diaryRes.ok) {
+          const diaryData = await diaryRes.json();
+          console.log('📝 Загружено записей дневника:', diaryData.length);
+          setDiaryEntries(diaryData);
+        }
+        
+        // Урожай
+        if (harvestRes.ok) {
+          const harvestData = await harvestRes.json();
+          console.log('🌾 Загружено записей урожая:', harvestData.length);
+          setHarvestHistory(harvestData);
+        }
   
       } catch (error) {
         console.error('❌ Ошибка загрузки данных:', error);
@@ -168,6 +208,7 @@ const PersonalGarden: React.FC = () => {
   
     loadData();
   }, []);
+  
   
 
   // ========================
@@ -298,7 +339,8 @@ const PersonalGarden: React.FC = () => {
       }
   
       const savedTask = await response.json();
-      setTasks([savedTask, ...tasks]);
+      const transformed = transformTaskFromDB(savedTask);  // ← Трансформируйте!
+      setTasks([transformed, ...tasks]);
       setNewTask({ title: '', dueDate: '', urgent: false, description: '' });
       setShowTaskModal(false);
       console.log('✅ Задача сохранена');
@@ -603,7 +645,7 @@ const PersonalGarden: React.FC = () => {
         author: currentUser,
         authorInitial: currentUserInitial,
         date: new Date().toISOString().split('T')[0],
-        tags: newCommunityPost.tags
+        tags: (newCommunityPost.tags || '')
           .split(',')
           .map((t) => t.trim())
           .filter(Boolean),
@@ -630,12 +672,20 @@ const PersonalGarden: React.FC = () => {
     (t) => new Date(t.dueDate).toDateString() === new Date().toDateString()
   );
 
-  const weekTasks = tasks.filter((t) => {
-    const taskDate = new Date(t.dueDate);
+  const weekTasks = tasks.filter(t => {
+    if (!t.dueDate) return false;
+    
+    const [year, month, day] = t.dueDate.split('-').map(Number);
+    const taskDate = new Date(year, month - 1, day, 0, 0, 0, 0);
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const diff = taskDate.getTime() - today.getTime();
+    
+    console.log(`📌 "${t.title}": ${t.dueDate} -> ${taskDate.toDateString()}, diff: ${Math.ceil(diff / (1000 * 60 * 60 * 24))} дней`);
+    
     return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
   });
+  
 
   const filteredCommunityPosts = communityPosts.filter((p) => p.category === communityTab);
   // ========================
