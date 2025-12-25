@@ -168,7 +168,6 @@ const PersonalGarden: React.FC = () => {
           const transformed = tasksData.map(transformTaskFromDB);  // ✅ ПРАВИЛЬНО
           setTasks(transformed);
           console.log('📋 Загружено задач:', tasksData.length);
-          setTasks(tasksData);
         } else {
           console.error('❌ Ошибка загрузки задач:', tasksRes.status);
         }
@@ -339,7 +338,7 @@ const PersonalGarden: React.FC = () => {
       }
   
       const savedTask = await response.json();
-      const transformed = transformTaskFromDB(savedTask);  // ← Трансформируйте!
+      const transformed = transformTaskFromDB(savedTask)  // ← Трансформируйте!
       setTasks([transformed, ...tasks]);
       setNewTask({ title: '', dueDate: '', urgent: false, description: '' });
       setShowTaskModal(false);
@@ -668,23 +667,39 @@ const PersonalGarden: React.FC = () => {
 
   const totalHarvest = harvestHistory.reduce((sum, entry) => sum + entry.amount, 0);
 
-  const todayTasks = tasks.filter(
-    (t) => new Date(t.dueDate).toDateString() === new Date().toDateString()
-  );
-
+  const todayTasks = tasks.filter(t => {
+    if (!t.dueDate) return false;
+    
+    // Парси дату правильно (учитываем UTC сдвиг)
+    const taskDate = new Date(t.dueDate);
+    const today = new Date();
+    
+    // Сравниваем только YYYY-MM-DD (игнорируя время)
+    const taskDateStr = taskDate.toLocaleDateString('ru-RU');
+    const todayStr = today.toLocaleDateString('ru-RU');
+    
+    console.log(`📅 Сравниваю: "${taskDateStr}" === "${todayStr}"? ${taskDateStr === todayStr}`);
+    
+    return taskDateStr === todayStr;
+  });
+  
+  
   const weekTasks = tasks.filter(t => {
     if (!t.dueDate) return false;
     
-    const [year, month, day] = t.dueDate.split('-').map(Number);
-    const taskDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+    // ✅ Парси дату правильно
+    const taskDate = new Date(t.dueDate);
+    if (isNaN(taskDate.getTime())) return false; // Проверка на invalid date
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const diff = taskDate.getTime() - today.getTime();
     
+    const diff = taskDate.getTime() - today.getTime();
     console.log(`📌 "${t.title}": ${t.dueDate} -> ${taskDate.toDateString()}, diff: ${Math.ceil(diff / (1000 * 60 * 60 * 24))} дней`);
     
     return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
   });
+  
   
 
   const filteredCommunityPosts = communityPosts.filter((p) => p.category === communityTab);

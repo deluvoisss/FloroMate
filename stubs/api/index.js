@@ -1822,9 +1822,10 @@ app.post('/api/garden/tasks', async (req, res) => {
   try {
     const { userId, title, dueDate, urgent, description } = req.body;
     const result = await pool.query(
-      `INSERT INTO garden_tasks (user_id, title, due_date, urgent, description)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [userId, title, dueDate, urgent || false, description || null]
+      `INSERT INTO garden_tasks (user_id, title, due_date, completed, urgent, description)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [userId, title, dueDate, false, urgent || false, description || null]
+      //                        ↑ НОВАЯ ЗАДАЧА ВСЕГДА false
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -1832,6 +1833,7 @@ app.post('/api/garden/tasks', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 app.get('/api/garden/tasks/:userId', async (req, res) => {
   try {
