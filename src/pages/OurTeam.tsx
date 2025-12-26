@@ -64,7 +64,7 @@ const OurTeam: React.FC = () => {
     setSubmitStatus(null);
 
     try {
-      const response = await fetch('http://localhost:3001/api/feedback', {
+      const response = await fetch('http://147.45.184.57/api/feedback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

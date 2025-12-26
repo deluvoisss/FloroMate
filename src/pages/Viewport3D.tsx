@@ -34,20 +34,20 @@ interface Viewport3DProps {
 }
 
 const MODEL_PATHS: Record<string, string> = {
-  'p5': 'http://localhost:3001/treeModels/tree.glb',
-  'flow': 'http://localhost:3001/treeModels/flow.glb',
-  'poly': 'http://localhost:3001/treeModels/poly.glb',
-  'f_home': 'http://localhost:3001/treeModels/home.glb',
-  'f_home2': 'http://localhost:3001/treeModels/home1.glb',
-  'f_home3': 'http://localhost:3001/treeModels/modern.glb',
-  'amh': 'http://localhost:3001/treeModels/amho.glb',
-  'asd': 'http://localhost:3001/treeModels/asd.glb',
-  'barn': 'http://localhost:3001/treeModels/barn.glb',
-  'qwe': 'http://localhost:3001/treeModels/qwe.glb',
-  'fenc1': 'http://localhost:3001/treeModels/fenc.glb',
-  'fence1': 'http://localhost:3001/treeModels/fence.glb',
-  'fence2': 'http://localhost:3001/treeModels/fences.glb',
-  'fence3': 'http://localhost:3001/treeModels/fencess.glb',
+  'p5': 'http://147.45.184.57/treeModels/tree.glb',
+  'flow': 'http://147.45.184.57/treeModels/flow.glb',
+  'poly': 'http://147.45.184.57/treeModels/poly.glb',
+  'f_home': 'http://147.45.184.57/treeModels/home.glb',
+  'f_home2': 'http://147.45.184.57/treeModels/home1.glb',
+  'f_home3': 'http://147.45.184.57/treeModels/modern.glb',
+  'amh': 'http://147.45.184.57/treeModels/amho.glb',
+  'asd': 'http://147.45.184.57/treeModels/asd.glb',
+  'barn': 'http://147.45.184.57/treeModels/barn.glb',
+  'qwe': 'http://147.45.184.57/treeModels/qwe.glb',
+  'fenc1': 'http://147.45.184.57/treeModels/fenc.glb',
+  'fence1': 'http://147.45.184.57/treeModels/fence.glb',
+  'fence2': 'http://147.45.184.57/treeModels/fences.glb',
+  'fence3': 'http://147.45.184.57/treeModels/fencess.glb',
 };
 
 const GROUND_COLORS = {

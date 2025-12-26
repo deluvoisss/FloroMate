@@ -142,7 +142,7 @@ const LandscapeDesign: React.FC = () => {
         formData.append('prompt', customPrompt.trim());
       }
 
-      const response = await fetch('http://localhost:3001/api/landscape/generate', {
+      const response = await fetch('http://147.45.184.57/api/landscape/generate', {
         method: 'POST',
         body: formData,
       });

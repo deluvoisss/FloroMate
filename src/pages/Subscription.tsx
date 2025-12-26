@@ -123,7 +123,7 @@ const Subscription: React.FC = () => {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3001/api/subscription/upgrade', {
+      const response = await fetch('http://147.45.184.57/api/subscription/upgrade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

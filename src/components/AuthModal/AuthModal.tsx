@@ -11,7 +11,7 @@ interface AuthModalProps {
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialType = 'login' }) => {
   const dispatch = useAppDispatch();
-  const API_BASE = 'http://localhost:3001';
+  const API_BASE = 'http://147.45.184.57';
 
   const [formType, setFormType] = useState<'login' | 'register' | 'verify' | 'resetPassword' | 'resetVerify' | 'newPassword'>(initialType);
   const [formData, setFormData] = useState({

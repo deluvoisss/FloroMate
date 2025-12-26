@@ -66,7 +66,7 @@ const DiseaseDetection: React.FC = () => {
       const formData = new FormData();
       formData.append('image', imageFile);
 
-      const response = await fetch('http://localhost:3001/api/disease-detect', {
+      const response = await fetch('http://147.45.184.57/api/disease-detect', {
         method: 'POST',
         body: formData,
       });

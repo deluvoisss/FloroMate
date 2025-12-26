@@ -61,7 +61,7 @@ const ChatAssistant: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3001/api/chat', {
+      const response = await fetch('http://147.45.184.57/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -145,7 +145,7 @@ const PersonalGarden: React.FC = () => {
         }
         
         const userId = parseInt(storedUserId, 10);
-        const baseUrl = 'http://localhost:3001';
+        const baseUrl = 'http://147.45.184.57';
         
         console.log('📡 Загружаем данные для userId:', userId);
         
@@ -247,7 +247,7 @@ const PersonalGarden: React.FC = () => {
 
     setAILoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/garden-chat', {
+      const response = await fetch('http://147.45.184.57/api/garden-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -348,7 +348,7 @@ const PersonalGarden: React.FC = () => {
   
       console.log('📝 Задача:', payload);
   
-      const response = await fetch('http://localhost:3001/api/garden/tasks', {
+      const response = await fetch('http://147.45.184.57/api/garden/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -379,7 +379,7 @@ const PersonalGarden: React.FC = () => {
       const task = tasks.find((t) => t.id === id);
       if (!task) return;
 
-      const response = await fetch(`http://localhost:3001/api/garden/tasks/${id}`, {
+      const response = await fetch(`http://147.45.184.57/api/garden/tasks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed: !task.completed }),
@@ -397,7 +397,7 @@ const PersonalGarden: React.FC = () => {
   const deleteTask = async (id: number | undefined) => {
     if (!id) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/garden/tasks/${id}`, {
+      const response = await fetch(`http://147.45.184.57/api/garden/tasks/${id}`, {
         method: 'DELETE',
       });
 
@@ -427,7 +427,7 @@ const PersonalGarden: React.FC = () => {
         return;
       }
   
-      const response = await fetch('http://localhost:3001/api/garden/watering', {
+      const response = await fetch('http://147.45.184.57/api/garden/watering', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, ...newWatering }),
@@ -453,7 +453,7 @@ const PersonalGarden: React.FC = () => {
   const deleteWatering = async (id: number | undefined) => {
     if (!id) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/garden/watering/${id}`, {
+      const response = await fetch(`http://147.45.184.57/api/garden/watering/${id}`, {
         method: 'DELETE',
       });
 
@@ -483,7 +483,7 @@ const PersonalGarden: React.FC = () => {
         return;
       }
   
-      const response = await fetch('http://localhost:3001/api/garden/fertilizer', {
+      const response = await fetch('http://147.45.184.57/api/garden/fertilizer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, ...newFertilizer }),
@@ -509,7 +509,7 @@ const PersonalGarden: React.FC = () => {
   const deleteFertilizer = async (id: number | undefined) => {
     if (!id) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/garden/fertilizer/${id}`, {
+      const response = await fetch(`http://147.45.184.57/api/garden/fertilizer/${id}`, {
         method: 'DELETE',
       });
 
@@ -556,7 +556,7 @@ const PersonalGarden: React.FC = () => {
   
       console.log('📝 Отправляем:', JSON.stringify(payload, null, 2));
   
-      const response = await fetch('http://localhost:3001/api/garden/diary', {
+      const response = await fetch('http://147.45.184.57/api/garden/diary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -612,7 +612,7 @@ const PersonalGarden: React.FC = () => {
         return;
       }
   
-      const response = await fetch('http://localhost:3001/api/garden/harvest', {
+      const response = await fetch('http://147.45.184.57/api/garden/harvest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -641,7 +641,7 @@ const PersonalGarden: React.FC = () => {
   const deleteHarvest = async (id: number | undefined) => {
     if (!id) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/garden/harvest/${id}`, {
+      const response = await fetch(`http://147.45.184.57/api/garden/harvest/${id}`, {
         method: 'DELETE',
       });
 
@@ -687,7 +687,7 @@ const PersonalGarden: React.FC = () => {
   
       console.log('📝 Отправляем пост:', payload); // ← отладка
   
-      const response = await fetch('http://localhost:3001/api/community/posts', {
+      const response = await fetch('http://147.45.184.57/api/community/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
