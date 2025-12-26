@@ -1,3 +1,11 @@
+export type SubscriptionType = 'free' | 'pro' | 'pro_ultra';
+
+export interface UserSubscription {
+  type: SubscriptionType;
+  dailyRequests: number;
+  usedRequests: number;
+}
+
 export interface CareInfo {
   watering?: string;
   light?: string;

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './PersonalGarden.css';
 
 // ========================
 // TYPES
 // ========================
+
 interface Post {
   id: string;
   title: string;
@@ -19,7 +20,7 @@ interface Post {
 }
 
 interface Task {
-  id: string;
+  id?: number;
   title: string;
   dueDate: string;
   completed: boolean;
@@ -28,6 +29,7 @@ interface Task {
 }
 
 interface WateringSchedule {
+  id?: number;
   plant: string;
   frequency: string;
   amount: string;
@@ -35,7 +37,7 @@ interface WateringSchedule {
 }
 
 interface FertilizerSchedule {
-  id: string;
+  id?: number;
   name: string;
   type: string;
   schedule: string;
@@ -44,7 +46,7 @@ interface FertilizerSchedule {
 }
 
 interface DiaryEntryType {
-  id: string;
+  id?: number;
   date: string;
   title: string;
   photo?: string;
@@ -52,115 +54,191 @@ interface DiaryEntryType {
 }
 
 interface HarvestEntry {
+  id?: number;
   date: string;
   amount: number;
 }
 
+const transformTaskFromDB = (dbTask: any): Task => ({
+  id: dbTask.id,
+  title: dbTask.title,
+  dueDate: dbTask.due_date,      // ← ВОТ КЛЮЧЕВАЯ СТРОКА!
+  completed: Boolean(dbTask.completed),
+  urgent: Boolean(dbTask.urgent),
+  description: dbTask.description || ''
+});
+
 const PersonalGarden: React.FC = () => {
+  // ========================
+  // STATE - MODALS
+  // ========================
+
   const [mode, setMode] = useState<'personal' | 'community'>('personal');
   const [activeTab, setActiveTab] = useState<'diary' | 'tasks' | 'fertilizer' | 'watering' | 'stats'>('diary');
   const [communityTab, setCommunityTab] = useState<'tips' | 'achievements'>('tips');
-  
   const [showAIModal, setShowAIModal] = useState(false);
   const [showDiaryModal, setShowDiaryModal] = useState(false);
   const [showHarvestModal, setShowHarvestModal] = useState(false);
   const [showCommunityPostModal, setShowCommunityPostModal] = useState(false);
-  
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showWateringModal, setShowWateringModal] = useState(false);
+  const [showFertilizerModal, setShowFertilizerModal] = useState(false);
+
+  // ========================
+  // STATE - AI
+  // ========================
+
   const [aiMessage, setAIMessage] = useState('');
   const [aiLoading, setAILoading] = useState(false);
   const [aiResults, setAIResults] = useState<any>(null);
   const [showAIResultsModal, setShowAIResultsModal] = useState(false);
 
+  // ========================
+  // STATE - USER INFO
+  // ========================
+
   const currentUser = 'Вы';
   const currentUserInitial = 'В';
 
+  // ========================
+  // STATE - PHOTO
+  // ========================
+
   const [newDiaryPhoto, setNewDiaryPhoto] = useState<File | null>(null);
-const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(null);
+  const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(null);
 
-  // Для добавления задачи
-  const [showTaskModal, setShowTaskModal] = useState(false);
+  // ========================
+  // STATE - FORMS
+  // ========================
+
   const [newTask, setNewTask] = useState({ title: '', dueDate: '', urgent: false, description: '' });
-
-  // Для добавления полива
-  const [showWateringModal, setShowWateringModal] = useState(false);
   const [newWatering, setNewWatering] = useState({ plant: '', frequency: '', amount: '', description: '' });
-
-  // Для добавления удобрения
-  const [showFertilizerModal, setShowFertilizerModal] = useState(false);
   const [newFertilizer, setNewFertilizer] = useState({ name: '', type: 'минеральное', schedule: '', amount: '', description: '' });
+  const [newDiaryEntry, setNewDiaryEntry] = useState({ title: '', text: '' });
+  const [newCommunityPost, setNewCommunityPost] = useState({ title: '', description: '', tags: '' });
+  const [newHarvestAmount, setNewHarvestAmount] = useState('');
 
   // ========================
   // STATE - ДАННЫЕ САДА
   // ========================
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: '1', title: 'Полив помидоров', dueDate: '2025-12-22', completed: false, urgent: true },
-    { id: '2', title: 'Подкормка огурцов', dueDate: '2025-12-22', completed: false, urgent: false },
-    { id: '3', title: 'Рыхление грядок', dueDate: '2025-12-23', completed: true, urgent: false },
-    { id: '4', title: 'Обработка вредителей', dueDate: '2025-12-24', completed: false, urgent: true },
-  ]);
 
-  const [wateringSchedule, setWateringSchedule] = useState<WateringSchedule[]>([
-    { plant: 'Помидоры', frequency: 'каждый день', amount: '1-2 литра', description: 'Поливать под корень' },
-    { plant: 'Огурцы', frequency: 'через день', amount: '1.5 литра', description: 'Утром или вечером' },
-    { plant: 'Зелень', frequency: '2 раза в день', amount: '0.5 литра', description: 'Опрыскивание' },
-  ]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [wateringSchedule, setWateringSchedule] = useState<WateringSchedule[]>([]);
+  const [fertilizerSchedule, setFertilizerSchedule] = useState<FertilizerSchedule[]>([]);
+  const [diaryEntries, setDiaryEntries] = useState<DiaryEntryType[]>([]);
+  const [harvestHistory, setHarvestHistory] = useState<HarvestEntry[]>([]);
+  const [communityPosts, setCommunityPosts] = useState<Post[]>([]);
 
-  const [fertilizerSchedule, setFertilizerSchedule] = useState<FertilizerSchedule[]>([
-    { id: '1', name: 'Азотные удобрения', type: 'минеральное', schedule: 'каждую неделю', amount: '10 грамм на литр', description: 'Для роста листьев' },
-    { id: '2', name: 'Фосфорные удобрения', type: 'минеральное', schedule: 'раз в 2 недели', amount: '5 грамм на литр', description: 'Для развития корней' },
-    { id: '3', name: 'Компост', type: 'органическое', schedule: 'раз в месяц', amount: '2-3 литра', description: 'Улучшение почвы' },
-  ]);
+  // ========================
+  // LOAD DATA FROM DATABASE
+  // ========================
 
-  const [diaryEntries, setDiaryEntries] = useState<DiaryEntryType[]>([
-    { id: '1', date: '2025-12-21', title: 'Отличный день для посадок', text: 'Сегодня посадил новые семена зелени. Погода была идеальной, температура стабильная.' },
-    { id: '2', date: '2025-12-19', title: 'Урожай превзошел ожидания', text: 'Собрал более 50 кг помидоров в этом сезоне! Это был лучший урожай за все годы.' },
-  ]);
-
-  const [newDiaryEntry, setNewDiaryEntry] = useState({ title: '', text: '' });
-  const [newCommunityPost, setNewCommunityPost] = useState({ title: '', description: '', tags: '' });
-
-  const [harvestHistory, setHarvestHistory] = useState<HarvestEntry[]>([
-    { date: '2025-12-21', amount: 5 },
-    { date: '2025-12-20', amount: 3 },
-    { date: '2025-12-19', amount: 8 },
-    { date: '2025-12-18', amount: 4 },
-  ]);
-  const [newHarvestAmount, setNewHarvestAmount] = useState('');
-
-  const [communityPosts, setCommunityPosts] = useState<Post[]>([
-    {
-      id: '1',
-      title: 'Борьба с вредителями: натуральные методы',
-      description: 'Избавляюсь от вредителей без химии. Использую отвар чеснока и мыльный раствор.',
-      author: 'Татьяна Волкова',
-      authorInitial: 'Т',
-      date: '2025-12-21',
-      tags: ['вредители', 'эко-способы', 'защита'],
-      category: 'tips',
-      likes: 89,
-      userLiked: false,
-      comments: []
-    },
-    {
-      id: '2',
-      title: 'Рекорд урожая огурцов!',
-      description: 'Собрал 120 кг огурцов с одной грядки! Поделюсь секретом успеха.',
-      author: 'Иван Петров',
-      authorInitial: 'И',
-      date: '2025-12-20',
-      tags: ['огурцы', 'урожай', 'достижение'],
-      category: 'achievements',
-      likes: 156,
-      userLiked: false,
-      comments: []
-    },
-  ]);
-
-  const totalHarvest = harvestHistory.reduce((sum, entry) => sum + entry.amount, 0);
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const storedUserId = localStorage.getItem('userId');
+        console.log('🔍 Загрузка данных, userId:', storedUserId);
+        
+        if (!storedUserId) {
+          console.warn('⚠️ userId не найден');
+          return;
+        }
+        
+        const userId = parseInt(storedUserId, 10);
+        const baseUrl = 'http://localhost:3001';
+        
+        console.log('📡 Загружаем данные для userId:', userId);
+        
+        // ✅ ВСЕ запросы параллельно (ДОБАВЬ communityRes!)
+        const [tasksRes, wateringRes, fertilizerRes, diaryRes, harvestRes, communityRes] =
+          await Promise.all([
+            fetch(`${baseUrl}/api/garden/tasks/${userId}`),
+            fetch(`${baseUrl}/api/garden/watering/${userId}`),
+            fetch(`${baseUrl}/api/garden/fertilizer/${userId}`),
+            fetch(`${baseUrl}/api/garden/diary/${userId}`),
+            fetch(`${baseUrl}/api/garden/harvest/${userId}`),
+            fetch(`${baseUrl}/api/community/posts`), // ← НОВОЕ!
+          ]);
+        
+        console.log('✅ Все запросы выполнены');
+        console.log('📊 tasksRes.status:', tasksRes.status);
+        
+        // Задачи
+        if (tasksRes.ok) {
+          const tasksData = await tasksRes.json();
+          const transformed = tasksData.map(transformTaskFromDB);
+          setTasks(transformed);
+          console.log('📋 Загружено задач:', tasksData.length);
+        } else {
+          console.error('❌ Ошибка загрузки задач:', tasksRes.status);
+        }
+        
+        // Полив
+        if (wateringRes.ok) {
+          const wateringData = await wateringRes.json();
+          console.log('💧 Загружено расписаний полива:', wateringData.length);
+          setWateringSchedule(wateringData);
+        }
+        
+        // Удобрения
+        if (fertilizerRes.ok) {
+          const fertilizerData = await fertilizerRes.json();
+          console.log('🧪 Загружено удобрений:', fertilizerData.length);
+          setFertilizerSchedule(fertilizerData);
+        }
+        
+        // Дневник
+        if (diaryRes.ok) {
+          const diaryData = await diaryRes.json();
+          console.log('📝 Загружено записей дневника:', diaryData.length);
+          setDiaryEntries(diaryData);
+        }
+        
+        // Урожай
+        if (harvestRes.ok) {
+          const harvestData = await harvestRes.json();
+          console.log('🌾 Загружено записей урожая:', harvestData.length);
+          setHarvestHistory(harvestData);
+        }
+        
+        // ✅ Сообщество (НОВОЕ!)
+        if (communityRes.ok) {
+          const communityData = await communityRes.json();
+          console.log('👥 Загружено постов сообщества:', communityData.length);
+          
+          // Преобразуй формат для фронта
+          const formattedPosts = communityData.map((post: any) => ({
+            id: post.id.toString(),
+            title: post.title,
+            description: post.description,
+            author: post.author,
+            authorInitial: post.author.charAt(0).toUpperCase(),
+            date: new Date(post.created_at).toISOString().split('T')[0],
+            tags: post.tags || [],
+            category: post.category,
+            likes: post.likes || 0,
+            comments: [],
+            userLiked: false,
+          }));
+          
+          setCommunityPosts(formattedPosts);
+        }
+        
+      } catch (error) {
+        console.error('❌ Ошибка загрузки данных:', error);
+      }
+    };
+    
+    loadData();
+  }, []);
+  
 
   // ========================
   // AI HANDLER
   // ========================
+
+  
+
   const handleAIRequest = async () => {
     if (!aiMessage.trim()) {
       alert('❌ Введите описание проблемы');
@@ -168,7 +246,6 @@ const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(
     }
 
     setAILoading(true);
-
     try {
       const response = await fetch('http://localhost:3001/api/garden-chat', {
         method: 'POST',
@@ -185,7 +262,7 @@ const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(
       if (data.error) throw new Error(data.error);
 
       const aiTasks: Task[] = (data.tasks || []).map((t: any, i: number) => ({
-        id: `ai-task-${Date.now()}-${i}`,
+        id: undefined,
         title: t.title || `Действие ${i + 1}`,
         dueDate: t.dueDate || new Date().toISOString().split('T')[0],
         completed: false,
@@ -194,6 +271,7 @@ const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(
       }));
 
       const aiWatering: WateringSchedule[] = (data.watering || []).map((w: any) => ({
+        id: undefined,
         plant: w.plant || 'Растение',
         frequency: w.frequency || 'по необходимости',
         amount: w.amount || 'смотри описание',
@@ -201,7 +279,7 @@ const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(
       }));
 
       const aiFertilizer: FertilizerSchedule[] = (data.fertilizer || []).map((f: any, i: number) => ({
-        id: `ai-fert-${Date.now()}-${i}`,
+        id: undefined,
         name: f.name || `Удобрение ${i + 1}`,
         type: f.type || 'комплексное',
         schedule: f.schedule || 'раз в неделю',
@@ -210,7 +288,7 @@ const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(
       }));
 
       const diaryEntry: DiaryEntryType = {
-        id: `ai-entry-${Date.now()}`,
+        id: undefined,
         date: new Date().toISOString().split('T')[0],
         title: data.diaryEntry?.title || '🤖 Анализ от AI',
         text: data.diaryEntry?.text || data.analysis,
@@ -222,15 +300,15 @@ const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(
       setDiaryEntries((prev) => [diaryEntry, ...prev]);
 
       setAIResults({
-  analysis: data.analysis,
-  tasks: aiTasks,
-  watering: aiWatering,
-  fertilizer: aiFertilizer,
-  diaryEntry: data.diaryEntry,
-  tasksCount: aiTasks.length,
-  wateringCount: aiWatering.length,
-  fertilizerCount: aiFertilizer.length,
-});
+        analysis: data.analysis,
+        tasks: aiTasks,
+        watering: aiWatering,
+        fertilizer: aiFertilizer,
+        diaryEntry: data.diaryEntry,
+        tasksCount: aiTasks.length,
+        wateringCount: aiWatering.length,
+        fertilizerCount: aiFertilizer.length,
+      });
 
       setShowAIResultsModal(true);
       setShowAIModal(false);
@@ -244,114 +322,454 @@ const [newDiaryPhotoPreview, setNewDiaryPhotoPreview] = useState<string | null>(
   };
 
   // ========================
-  // HANDLERS
+  // TASK HANDLERS
   // ========================
-  const toggleTask = (id: string) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
-  };
 
- const addDiaryEntry = () => {
-  if (newDiaryEntry.title && newDiaryEntry.text) {
-    const newEntry: DiaryEntryType & { photo?: string } = {
-      id: `diary-${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
-      title: newDiaryEntry.title,
-      text: newDiaryEntry.text,
-      photo: newDiaryPhotoPreview || undefined, // preview URL для отображения
-    };
-    setDiaryEntries([newEntry, ...diaryEntries]);
-    setNewDiaryEntry({ title: '', text: '' });
-    setNewDiaryPhoto(null);
-    setNewDiaryPhotoPreview(null);
-    setShowDiaryModal(false);
-  }
-};
-
-  const addHarvestEntry = () => {
-    if (newHarvestAmount && parseFloat(newHarvestAmount) > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      const existing = harvestHistory.findIndex(h => h.date === today);
-      
-      if (existing >= 0) {
-        const updated = [...harvestHistory];
-        updated[existing].amount += parseFloat(newHarvestAmount);
-        setHarvestHistory(updated);
-      } else {
-        setHarvestHistory([{ date: today, amount: parseFloat(newHarvestAmount) }, ...harvestHistory]);
+  const addTask = async () => {
+    if (!newTask.title || !newTask.dueDate) {
+      alert('⚠️ Заполните название и дату');
+      return;
+    }
+  
+    try {
+      const userId = parseInt(localStorage.getItem('userId') || '0', 10);
+      if (!userId) {
+        alert('❌ Пожалуйста, авторизуйтесь');
+        return;
       }
-      
-      setNewHarvestAmount('');
-      setShowHarvestModal(false);
-    }
-  };
-
-  const addCommunityPost = () => {
-    if (newCommunityPost.title && newCommunityPost.description) {
-      const post: Post = {
-        id: Date.now().toString(),
-        title: newCommunityPost.title,
-        description: newCommunityPost.description,
-        author: currentUser,
-        authorInitial: currentUserInitial,
-        date: new Date().toISOString().split('T')[0],
-        tags: newCommunityPost.tags.split(',').map(t => t.trim()).filter(Boolean),
-        category: communityTab as 'tips' | 'achievements',
-        likes: 0,
-        userLiked: false,
-        comments: []
-      };
-      setCommunityPosts([post, ...communityPosts]);
-      setNewCommunityPost({ title: '', description: '', tags: '' });
-      setShowCommunityPostModal(false);
-    }
-  };
-
-  const todayTasks = tasks.filter(t => new Date(t.dueDate).toDateString() === new Date().toDateString());
-  const weekTasks = tasks.filter(t => {
-    const taskDate = new Date(t.dueDate);
-    const today = new Date();
-    const diff = taskDate.getTime() - today.getTime();
-    return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
-  });
-
-  const filteredCommunityPosts = communityPosts.filter(p => p.category === communityTab);
-
-
-    const addTask = () => {
-    if (newTask.title && newTask.dueDate) {
-      const task: Task = {
-        id: `task-${Date.now()}`,
-        title: newTask.title,
+  
+      const payload = {
+        userId: userId,
+        title: newTask.title.trim(),
         dueDate: newTask.dueDate,
-        completed: false,
         urgent: newTask.urgent,
-        description: newTask.description || undefined,
+        description: newTask.description.trim(),
       };
-      setTasks([task, ...tasks]);
+  
+      console.log('📝 Задача:', payload);
+  
+      const response = await fetch('http://localhost:3001/api/garden/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+  
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        alert(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+        return;
+      }
+  
+      const savedTask = await response.json();
+      const transformed = transformTaskFromDB(savedTask)  // ← Трансформируйте!
+      setTasks([transformed, ...tasks]);
       setNewTask({ title: '', dueDate: '', urgent: false, description: '' });
       setShowTaskModal(false);
+      console.log('✅ Задача сохранена');
+  
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+      alert(`❌ Ошибка: ${(error as Error).message}`);
+    }
+  };
+  
+  const toggleTask = async (id: number | undefined) => {
+    if (!id) return;
+    try {
+      const task = tasks.find((t) => t.id === id);
+      if (!task) return;
+
+      const response = await fetch(`http://localhost:3001/api/garden/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: !task.completed }),
+      });
+
+      if (response.ok) {
+        setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
+        console.log('✅ Задача обновлена');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
     }
   };
 
-  const addWatering = () => {
-    if (newWatering.plant && newWatering.frequency) {
-      setWateringSchedule([newWatering, ...wateringSchedule]);
+  const deleteTask = async (id: number | undefined) => {
+    if (!id) return;
+    try {
+      const response = await fetch(`http://localhost:3001/api/garden/tasks/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setTasks(tasks.filter((t) => t.id !== id));
+        console.log('✅ Задача удалена');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+    }
+  };
+
+  // ========================
+  // WATERING HANDLERS
+  // ========================
+
+  const addWatering = async () => {
+    if (!newWatering.plant || !newWatering.frequency) {
+      alert('⚠️ Заполните растение и частоту');
+      return;
+    }
+  
+    try {
+      const userId = parseInt(localStorage.getItem('userId') || '0', 10);
+      if (!userId) {
+        alert('❌ Пожалуйста, авторизуйтесь');
+        return;
+      }
+  
+      const response = await fetch('http://localhost:3001/api/garden/watering', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, ...newWatering }),
+      });
+  
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        alert(`❌ Ошибка: ${error.error}`);
+        return;
+      }
+  
+      const saved = await response.json();
+      setWateringSchedule([saved, ...wateringSchedule]);
       setNewWatering({ plant: '', frequency: '', amount: '', description: '' });
       setShowWateringModal(false);
+  
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+    }
+  };
+  
+
+  const deleteWatering = async (id: number | undefined) => {
+    if (!id) return;
+    try {
+      const response = await fetch(`http://localhost:3001/api/garden/watering/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setWateringSchedule(wateringSchedule.filter((w) => w.id !== id));
+        console.log('✅ Полив удален');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
     }
   };
 
-  const addFertilizer = () => {
-    if (newFertilizer.name && newFertilizer.schedule) {
-      const fertilizer: FertilizerSchedule = {
-        id: `fert-${Date.now()}`,
-        ...newFertilizer,
-      };
-      setFertilizerSchedule([fertilizer, ...fertilizerSchedule]);
+  // ========================
+  // FERTILIZER HANDLERS
+  // ========================
+
+  const addFertilizer = async () => {
+    if (!newFertilizer.name || !newFertilizer.schedule) {
+      alert('⚠️ Заполните название и график');
+      return;
+    }
+  
+    try {
+      const userId = parseInt(localStorage.getItem('userId') || '0', 10);
+      if (!userId) {
+        alert('❌ Пожалуйста, авторизуйтесь');
+        return;
+      }
+  
+      const response = await fetch('http://localhost:3001/api/garden/fertilizer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, ...newFertilizer }),
+      });
+  
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        alert(`❌ Ошибка: ${error.error}`);
+        return;
+      }
+  
+      const saved = await response.json();
+      setFertilizerSchedule([saved, ...fertilizerSchedule]);
       setNewFertilizer({ name: '', type: 'минеральное', schedule: '', amount: '', description: '' });
       setShowFertilizerModal(false);
+  
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
     }
   };
+  
+
+  const deleteFertilizer = async (id: number | undefined) => {
+    if (!id) return;
+    try {
+      const response = await fetch(`http://localhost:3001/api/garden/fertilizer/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setFertilizerSchedule(fertilizerSchedule.filter((f) => f.id !== id));
+        console.log('✅ Удобрение удалено');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+    }
+  };
+
+  // ========================
+  // DIARY HANDLERS
+  // ========================
+
+  const addDiaryEntry = async () => {
+    if (!newDiaryEntry.title.trim() || !newDiaryEntry.text.trim()) {
+      alert('⚠️ Заполните название и текст записи');
+      return;
+    }
+  
+    try {
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        alert('❌ Пожалуйста, авторизуйтесь');
+        return;
+      }
+  
+      const userIdNumber = parseInt(userId, 10);
+      if (isNaN(userIdNumber)) {
+        alert('❌ Невалидный userId');
+        return;
+      }
+  
+      // ✅ Подготовка payload
+      const payload = {
+        userId: userIdNumber,  // ← Попробуйте ЭТО первым
+        // Если не работает, замените на: user_id: userIdNumber,
+        title: newDiaryEntry.title.trim(),
+        text: newDiaryEntry.text.trim(),
+        date: new Date().toISOString().split('T')[0],
+      };
+  
+      console.log('📝 Отправляем:', JSON.stringify(payload, null, 2));
+  
+      const response = await fetch('http://localhost:3001/api/garden/diary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+  
+      console.log('📊 Status:', response.status);
+  
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Ошибка:', errorData);
+        alert(`❌ Ошибка: ${errorData.error || 'Неизвестная ошибка'}`);
+        return;
+      }
+  
+      const savedEntry = await response.json();
+      console.log('✅ Сохранено:', savedEntry);
+  
+      setDiaryEntries([{
+        id: savedEntry.id,
+        date: savedEntry.date || new Date().toISOString().split('T')[0],
+        title: savedEntry.title,
+        text: savedEntry.text,
+        photo: savedEntry.photo_url,
+      }, ...diaryEntries]);
+  
+      setNewDiaryEntry({ title: '', text: '' });
+      setNewDiaryPhoto(null);
+      setNewDiaryPhotoPreview(null);
+      setShowDiaryModal(false);
+      alert('✅ Запись сохранена!');
+  
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+      alert(`❌ Ошибка: ${(error as Error).message}`);
+    }
+  };
+  
+
+  // ========================
+  // HARVEST HANDLERS
+  // ========================
+
+  const addHarvestEntry = async () => {
+    if (!newHarvestAmount || parseFloat(newHarvestAmount) <= 0) {
+      alert('⚠️ Введите количество урожая');
+      return;
+    }
+  
+    try {
+      const userId = parseInt(localStorage.getItem('userId') || '0', 10);
+      if (!userId) {
+        alert('❌ Пожалуйста, авторизуйтесь');
+        return;
+      }
+  
+      const response = await fetch('http://localhost:3001/api/garden/harvest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          amount: parseFloat(newHarvestAmount),
+        }),
+      });
+  
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        alert(`❌ Ошибка: ${error.error}`);
+        return;
+      }
+  
+      const saved = await response.json();
+      setHarvestHistory([saved, ...harvestHistory]);
+      setNewHarvestAmount('');
+      setShowHarvestModal(false);
+  
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+    }
+  };
+  
+
+  const deleteHarvest = async (id: number | undefined) => {
+    if (!id) return;
+    try {
+      const response = await fetch(`http://localhost:3001/api/garden/harvest/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setHarvestHistory(harvestHistory.filter((h) => h.id !== id));
+        console.log('✅ Запись об урожае удалена');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+    }
+  };
+
+  // ========================
+  // COMMUNITY HANDLERS
+  // ========================
+
+  const addCommunityPost = async () => {
+    if (!newCommunityPost.title || !newCommunityPost.description) {
+      alert('⚠️ Заполните название и описание');
+      return;
+    }
+  
+    try {
+      const firstName = localStorage.getItem('firstName') || '';
+      const lastName = localStorage.getItem('lastName') || '';
+      const username = localStorage.getItem('username') || 'Аноним';
+      
+      // Используем полное имя или username
+      const authorName = (firstName && lastName) 
+        ? `${firstName} ${lastName}` 
+        : username;
+  
+      const payload = {
+        title: newCommunityPost.title,
+        description: newCommunityPost.description,
+        author: authorName,
+        category: communityTab,
+        tags: (newCommunityPost.tags || '')
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
+      };
+  
+      console.log('📝 Отправляем пост:', payload); // ← отладка
+  
+      const response = await fetch('http://localhost:3001/api/community/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+  
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        alert(`❌ Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+        return;
+      }
+  
+      const savedPost = await response.json();
+      
+      const newPost: Post = {
+        id: savedPost.id.toString(),
+        title: savedPost.title,
+        description: savedPost.description,
+        author: savedPost.author,
+        authorInitial: savedPost.author.charAt(0).toUpperCase(),
+        date: new Date(savedPost.created_at).toISOString().split('T')[0],
+        tags: savedPost.tags || [],
+        category: savedPost.category,
+        likes: savedPost.likes || 0,
+        userLiked: false,
+        comments: [],
+      };
+  
+      setCommunityPosts([newPost, ...communityPosts]);
+      setNewCommunityPost({ title: '', description: '', tags: '' });
+      setShowCommunityPostModal(false);
+      console.log('✅ Пост опубликован в сообществе');
+  
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+      alert(`❌ Ошибка: ${(error as Error).message}`);
+    }
+  };
+  
+  
+
+  // ========================
+  // COMPUTED VALUES
+  // ========================
+
+  const totalHarvest = harvestHistory.reduce((sum, entry) => sum + entry.amount, 0);
+
+  const todayTasks = tasks.filter(t => {
+    if (!t.dueDate) return false;
+    
+    // Парси дату правильно (учитываем UTC сдвиг)
+    const taskDate = new Date(t.dueDate);
+    const today = new Date();
+    
+    // Сравниваем только YYYY-MM-DD (игнорируя время)
+    const taskDateStr = taskDate.toLocaleDateString('ru-RU');
+    const todayStr = today.toLocaleDateString('ru-RU');
+    
+    console.log(`📅 Сравниваю: "${taskDateStr}" === "${todayStr}"? ${taskDateStr === todayStr}`);
+    
+    return taskDateStr === todayStr;
+  });
+  
+  
+  const weekTasks = tasks.filter(t => {
+    if (!t.dueDate) return false;
+    
+    // ✅ Парси дату правильно
+    const taskDate = new Date(t.dueDate);
+    if (isNaN(taskDate.getTime())) return false; // Проверка на invalid date
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const diff = taskDate.getTime() - today.getTime();
+    console.log(`📌 "${t.title}": ${t.dueDate} -> ${taskDate.toDateString()}, diff: ${Math.ceil(diff / (1000 * 60 * 60 * 24))} дней`);
+    
+    return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
+  });
+  
+  
+
+  const filteredCommunityPosts = communityPosts.filter((p) => p.category === communityTab);
   // ========================
   // RENDER
   // ========================

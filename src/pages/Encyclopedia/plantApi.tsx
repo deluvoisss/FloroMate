@@ -232,6 +232,34 @@ export const addRecognizedPlant = async (
   }
 };
 
+
+// ========================
+// SUBSCRIPTION API
+// ========================
+
+export const upgradeSubscription = async (
+  userId: number,
+  subscriptionType: 'free' | 'pro' | 'pro_ultra'
+): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/subscription/upgrade`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, subscriptionType }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to upgrade subscription');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('❌ Subscription upgrade error:', error);
+    throw error;
+  }
+};
+
 export default {
   fetchPlants,
   fetchPlantDetails,
@@ -239,4 +267,5 @@ export default {
   addRecognizedPlant,
   fetchPlantImage,
   enrichPlantData,
+  upgradeSubscription, // ← ДОБАВИТЬ
 };

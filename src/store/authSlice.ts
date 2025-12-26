@@ -6,6 +6,11 @@ interface User {
   last_name: string;
   username: string;
   phone: string;
+  subscription: {
+    type: 'free' | 'pro' | 'pro_ultra';
+    dailyRequests: number;
+    usedRequests: number;
+  };
 }
 
 interface AuthState {
@@ -45,6 +50,18 @@ const authSlice = createSlice({
         console.error('Ошибка сохранения пользователя:', error);
       }
     },
+
+    updateSubscription: (state, action: PayloadAction<User['subscription']>) => {
+      if (state.user) {
+        state.user.subscription = action.payload;
+        try {
+          localStorage.setItem('floromate_user', JSON.stringify(state.user));
+        } catch (error) {
+          console.error('Ошибка обновления подписки:', error);
+        }
+      }
+    },
+
     logout: (state) => {
       state.user = null;
       state.isAuthenticated = false;
@@ -58,5 +75,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { setUser, logout } = authSlice.actions;
+export const { setUser, updateSubscription, logout } = authSlice.actions;
 export default authSlice.reducer;

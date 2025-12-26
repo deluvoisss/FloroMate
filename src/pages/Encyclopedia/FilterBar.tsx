@@ -27,6 +27,8 @@ interface FilterSidebarProps {
   onToggle: () => void;
   onSearch?: (query: string) => void;
   availableColors: string[];
+  availableHabitats: string[];  // ← НОВОЕ
+  availableSizes: string[];     // ← НОВОЕ
 }
 
 const FilterSidebar: React.FC<FilterSidebarProps> = ({
@@ -36,7 +38,9 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   isOpen,
   onToggle,
   onSearch,
-  availableColors
+  availableColors,
+  availableHabitats, // ← НОВОЕ
+  availableSizes      // ← НОВОЕ
 }) => {
   const [searchInput, setSearchInput] = useState('');
 
@@ -49,6 +53,42 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
     return labels[color] || color.charAt(0).toUpperCase() + color.slice(1);
   };
 
+  const getHabitatLabel = (habitat: string): string => {
+    const labels: Record<string, string> = {
+      'комнатное': 'Комнатные',
+      'уличное': 'Садовые',
+      'водное': 'Водные'
+    };
+    return labels[habitat] || habitat.charAt(0).toUpperCase() + habitat.slice(1);
+  };
+
+  const getHabitatIcon = (habitat: string): string => {
+    const icons: Record<string, string> = {
+      'комнатное': '🏠',
+      'уличное': '🌳',
+      'водное': '💧'
+    };
+    return icons[habitat] || '🌿';
+  };
+
+  const getSizeLabel = (size: string): string => {
+    const labels: Record<string, string> = {
+      'маленькое': 'Маленькие',
+      'среднее': 'Средние',
+      'большое': 'Большие'
+    };
+    return labels[size] || size.charAt(0).toUpperCase() + size.slice(1);
+  };
+
+  const getSizeIcon = (size: string): string => {
+    const icons: Record<string, string> = {
+      'маленькое': '🌱',
+      'среднее': '🌿',
+      'большое': '🌳'
+    };
+    return icons[size] || '📏';
+  };
+
   const colorOptions: ColorOption[] = availableColors
   .map(color => ({
     value: color,
@@ -57,18 +97,22 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   }))
   .filter(option => option.value);
 
-  const habitatOptions: HabitatOption[] = [
-    { value: 'indoor', label: 'Комнатные', icon: '🏠' },
-    { value: 'garden', label: 'Садовые', icon: '🌳' },
-    { value: 'tropical', label: 'Тропические', icon: '🌴' },
-    { value: 'desert', label: 'Пустынные', icon: '🏜️' }
-  ];
+  const habitatOptions: HabitatOption[] = availableHabitats
+    .map(habitat => ({
+      value: habitat,
+      label: getHabitatLabel(habitat),
+      icon: getHabitatIcon(habitat)
+    }))
+    .filter(option => option.value);
 
-  const sizeOptions: SizeOption[] = [
-    { value: 'small', label: 'Маленькие', prefix: 'S' },
-    { value: 'medium', label: 'Средние', prefix: 'M' },
-    { value: 'large', label: 'Большие', prefix: 'L' }
-  ];
+  // ✅ НОВОЕ: динамические size опции
+  const sizeOptions: SizeOption[] = availableSizes
+    .map(size => ({
+      value: size,
+      label: getSizeLabel(size),
+      prefix: getSizeIcon(size)
+    }))
+    .filter(option => option.value);
 
   const hasActiveFilters: boolean =
     filters.colors.length > 0 ||
@@ -134,7 +178,6 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
                     }`}
                     onClick={() => onFilterChange('colors', option.value)}
                   >
-                    <span className="option-icon">{option.icon}</span>
                     <span>{option.label}</span>
                   </div>
                 ))}
@@ -143,48 +186,50 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
           )}
 
           {/* Место обитания */}
-          <div className="filter-group">
-            <h3 className="filter-title">
-              <span className="filter-icon">🌍</span>
-              Место
-            </h3>
-            <div className="filter-options">
-              {habitatOptions.map((option) => (
-                <div
-                  key={option.value}
-                  className={`filter-option ${
-                    filters.habitats.includes(option.value) ? 'active' : ''
-                  }`}
-                  onClick={() => onFilterChange('habitats', option.value)}
-                >
-                  <span className="option-icon">{option.icon}</span>
-                  <span>{option.label}</span>
-                </div>
-              ))}
+          {habitatOptions.length > 0 && (
+            <div className="filter-group">
+              <h3 className="filter-title">
+                <span className="filter-icon">🌍</span>
+                Место
+              </h3>
+              <div className="filter-options">
+                {habitatOptions.map((option) => (
+                  <div
+                    key={option.value}
+                    className={`filter-option ${
+                      filters.habitats.includes(option.value) ? 'active' : ''
+                    }`}
+                    onClick={() => onFilterChange('habitats', option.value)}
+                  >
+                    <span>{option.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Размер */}
-          <div className="filter-group">
-            <h3 className="filter-title">
-              <span className="filter-icon">📏</span>
-              Размер
-            </h3>
-            <div className="filter-options">
-              {sizeOptions.map((option) => (
-                <div
-                  key={option.value}
-                  className={`filter-option ${
-                    filters.sizes.includes(option.value) ? 'active' : ''
-                  }`}
-                  onClick={() => onFilterChange('sizes', option.value)}
-                >
-                  <span className="option-prefix">{option.prefix}</span>
-                  <span>{option.label}</span>
-                </div>
-              ))}
+          {sizeOptions.length > 0 && (
+            <div className="filter-group">
+              <h3 className="filter-title">
+                <span className="filter-icon">📏</span>
+                Размер
+              </h3>
+              <div className="filter-options">
+                {sizeOptions.map((option) => (
+                  <div
+                    key={option.value}
+                    className={`filter-option ${
+                      filters.sizes.includes(option.value) ? 'active' : ''
+                    }`}
+                    onClick={() => onFilterChange('sizes', option.value)}
+                  >
+                    <span>{option.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : (
         <div className="sidebar-compact">

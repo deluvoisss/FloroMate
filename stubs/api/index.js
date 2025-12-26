@@ -190,6 +190,10 @@ app.post('/api/auth/init-db', async (req, res) => {
         phone VARCHAR(20) UNIQUE NOT NULL,
         username VARCHAR(50) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        subscription_type VARCHAR(20) DEFAULT 'free',
+        daily_requests INT DEFAULT 3,
+        used_requests INT DEFAULT 0,
+        last_request_reset DATE DEFAULT CURRENT_DATE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_login TIMESTAMP
       );
@@ -203,6 +207,7 @@ app.post('/api/auth/init-db', async (req, res) => {
     res.status(500).json({ error: 'Database initialization failed' });
   }
 });
+
 
 // Check username availability
 app.get('/api/auth/check-username', async (req, res) => {
@@ -301,9 +306,15 @@ app.post('/api/auth/verify-code', async (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         username: user.username,
-        phone: user.phone
+        phone: user.phone,
+        subscription: {
+          type: user.subscription_plan || 'free',
+          dailyRequests: user.subscription_plan === 'pro_ultra' ? 30 : 
+                         user.subscription_plan === 'pro' ? 10 : 3,
+          usedRequests: user.requests_used_today || 0
+        }
       }
-    });
+    });    
   } catch (error) {
     console.error('❌ Error verifying code:', error);
     if (error.code === '23505') {
@@ -393,14 +404,103 @@ app.post('/api/auth/login', async (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         username: user.username,
-        phone: user.phone
+        phone: user.phone,
+        subscription: {
+          type: user.subscription_plan || 'free',
+          dailyRequests: user.subscription_plan === 'pro_ultra' ? 30 : 
+                         user.subscription_plan === 'pro' ? 10 : 3,
+          usedRequests: user.requests_used_today || 0
+        }
       }
-    });
+    });    
   } catch (error) {
     console.error('❌ Login error:', error);
     res.status(500).json({ error: 'Login error' });
   }
 });
+
+// Upgrade subscription
+// Upgrade subscription
+app.post('/api/subscription/upgrade', async (req, res) => {
+  try {
+    const { userId, subscriptionType } = req.body;
+
+    if (!userId || !subscriptionType) {
+      return res.status(400).json({ error: 'Missing userId or subscriptionType' });
+    }
+
+    // Валидация типа подписки
+    const validTypes = ['free', 'pro', 'pro_ultra'];
+    if (!validTypes.includes(subscriptionType)) {
+      return res.status(400).json({ error: 'Invalid subscription type' });
+    }
+
+    // Определяем лимиты запросов
+    const dailyLimits = {
+      free: 3,
+      pro: 10,
+      pro_ultra: 30
+    };
+
+    // Получаем текущую подписку (используем subscription_plan вместо subscription_type)
+    const currentUser = await pool.query(
+      'SELECT subscription_plan FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (currentUser.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const currentType = currentUser.rows[0].subscription_plan || 'free';
+    const tierOrder = { free: 0, pro: 1, pro_ultra: 2 };
+
+    // Проверка: можно ли апгрейдить
+    if (tierOrder[subscriptionType] <= tierOrder[currentType]) {
+      return res.status(400).json({ 
+        error: 'Cannot downgrade or purchase same subscription',
+        currentSubscription: currentType
+      });
+    }
+
+    // Обновляем подписку (используем правильные имена колонок)
+    const result = await pool.query(
+      `UPDATE users 
+       SET subscription_plan = $1, 
+           requests_used_today = 0,
+           subscription_start_date = CURRENT_TIMESTAMP,
+           last_request_date = CURRENT_DATE
+       WHERE id = $2 
+       RETURNING id, first_name, last_name, username, phone, 
+                 subscription_plan, requests_used_today`,
+      [subscriptionType, userId]
+    );
+
+    const user = result.rows[0];
+
+    console.log(`✅ User ${user.username} upgraded to ${subscriptionType}`);
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        username: user.username,
+        phone: user.phone,
+        subscription: {
+          type: user.subscription_plan,
+          dailyRequests: dailyLimits[subscriptionType],
+          usedRequests: user.requests_used_today || 0
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ Subscription upgrade error:', error);
+    res.status(500).json({ error: 'Failed to upgrade subscription' });
+  }
+});
+
 
 // ========================
 // PLANT DATABASE ROUTES
@@ -851,6 +951,92 @@ async function translatePlantWithGroq(scientificName) {
   }
 }
 
+// ========================
+// FEEDBACK TABLE INIT
+// ========================
+app.post('/api/feedback/init', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id SERIAL PRIMARY KEY,
+        author_name VARCHAR(100) NOT NULL,
+        author_role VARCHAR(100) NOT NULL,
+        comment TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT true
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_feedback_active ON feedback(is_active);
+    `);
+
+    console.log('✅ feedback table created');
+    res.json({ message: 'Feedback table initialized successfully' });
+  } catch (error) {
+    console.error('❌ Error creating feedback table:', error);
+    res.status(500).json({ error: 'Feedback table initialization failed' });
+  }
+});
+
+// Получить все отзывы (для совместимости)
+app.get('/api/feedback', async (req, res) => {
+  try {
+    console.log('📋 GET /api/feedback');
+    const result = await pool.query(`
+      SELECT 
+        id, 
+        name,
+        email,
+        message,
+        rating,
+        created_at
+      FROM feedback 
+      ORDER BY created_at DESC
+    `);
+    
+    console.log(`✅ ${result.rows.length} feedbacks found`);
+    
+    const feedbacks = result.rows.map(row => ({
+      id: row.id,
+      authorName: row.name || 'Пользователь',
+      authorRole: row.email,  // можно убрать если не нужно
+      comment: row.message,
+      rating: row.rating || 5,
+      createdAt: row.created_at
+    }));
+    
+    res.json(feedbacks);
+  } catch (error) {
+    console.error('❌ Error fetching feedbacks:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to load feedbacks', 
+      details: error.message 
+    });
+  }
+});
+
+
+// Удалить отзыв (soft delete)
+app.delete('/api/feedback/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'UPDATE feedback SET is_active = false WHERE id = $1 RETURNING id',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Feedback not found' });
+    }
+
+    console.log(`✅ Feedback ${id} deleted`);
+    res.json({ message: 'Feedback deleted successfully' });
+  } catch (error) {
+    console.error('❌ Error deleting feedback:', error);
+    res.status(500).json({ error: 'Failed to delete feedback' });
+  }
+});
+
 // POST /api/plants/enrich
 app.post('/api/plants/enrich', async (req, res) => {
   try {
@@ -909,26 +1095,65 @@ app.post('/api/plants/enrich', async (req, res) => {
 app.post('/api/chat', async (req, res) => {
   try {
     console.log('💬 Chat request received');
-    const { messages } = req.body;
+    const { messages, userId } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Invalid message format' });
+    }
+
+    // Проверяем лимит запросов если передан userId
+    if (userId) {
+      const user = await pool.query(
+        'SELECT subscription_plan, requests_used_today, last_request_date FROM users WHERE id = $1',
+        [userId]
+      );
+
+      if (user.rows.length > 0) {
+        const userData = user.rows[0];
+        const today = new Date().toISOString().split('T')[0];
+        const lastRequestDate = userData.last_request_date 
+          ? new Date(userData.last_request_date).toISOString().split('T')[0]
+          : null;
+
+        // Сброс счетчика если новый день
+        let usedRequests = userData.requests_used_today || 0;
+        if (lastRequestDate !== today) {
+          usedRequests = 0;
+        }
+
+        // Проверка лимита
+        const limits = { free: 3, pro: 10, pro_ultra: 30 };
+        const userLimit = limits[userData.subscription_plan] || 3;
+
+        if (usedRequests >= userLimit) {
+          return res.status(429).json({ 
+            error: `Достигнут дневной лимит запросов (${userLimit})` 
+          });
+        }
+
+        // Увеличиваем счетчик
+        await pool.query(
+          `UPDATE users 
+           SET requests_used_today = $1, 
+               last_request_date = CURRENT_DATE 
+           WHERE id = $2`,
+          [usedRequests + 1, userId]
+        );
+      }
     }
 
     const accessToken = await getAccessToken();
 
     const systemMessage = {
       role: 'system',
-      content: `Ты — профессиональный ботаник и эксперт по растениям. 
+      content: `Ты — профессиональный ботаник и эксперт по растениям.
 Отвечай кратко (2-4 предложения) на вопросы о:
 - Уходе за растениями (полив, свет, температура, влажность)
 - Болезнях и вредителях
 - Размножении и пересадке
 - Выборе растений для дома и сада
 - Совместимости растений
-
 Используй эмодзи: 🌱🌿🌸🪴💧☀️🌡️
-
 Если вопрос НЕ о растениях — вежливо откажи и попроси задать вопрос о растениях.`
     };
 
@@ -952,6 +1177,7 @@ app.post('/api/chat', async (req, res) => {
 
     const aiResponse = response.data.choices[0].message.content;
     console.log('✅ GigaChat response received');
+
     res.json({ response: aiResponse });
 
   } catch (error) {
@@ -962,6 +1188,7 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 });
+
 
 app.post('/api/plants/enrich', async (req, res) => {
   try {
@@ -1677,36 +1904,56 @@ app.get('/api/debug/plants-direct', async (req, res) => {
 
 app.post('/api/feedback', async (req, res) => {
   try {
-    const { name, email, message, rating, suggestions } = req.body;
+    const { name, email, phone, message, rating, suggestions } = req.body;
 
-    if (!message || message.trim().length < 10) {
-      return res.status(400).json({ 
-        error: 'Сообщение должно содержать минимум 10 символов' 
+    // Валидация
+    if (!email || !message) {
+      return res.status(400).json({
+        error: 'Email and message are required'
       });
     }
 
-    // Логируем обратную связь (в продакшене можно отправить на email или сохранить в БД)
-    console.log('📝 Новая обратная связь:');
-    console.log('  Имя:', name || 'Не указано');
-    console.log('  Email:', email || 'Не указан');
-    console.log('  Оценка:', rating || 'Не указана');
-    console.log('  Сообщение:', message);
-    if (suggestions) {
-      console.log('  Предложения:', suggestions);
+    if (message.trim().length < 10) {
+      return res.status(400).json({
+        error: 'Message must be at least 10 characters'
+      });
     }
 
-    // В продакшене здесь можно добавить отправку email через nodemailer или другой сервис
-    // Например: await sendEmail({ to: 'artsint@mail.ru', subject: 'Обратная связь FloroMate', text: ... });
+    // Проверка email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        error: 'Invalid email format'
+      });
+    }
 
-    res.json({ 
-      success: true, 
-      message: 'Спасибо за вашу обратную связь! Мы обязательно учтем ваши предложения.' 
+    // Вставка в БД
+    const result = await pool.query(
+      `INSERT INTO feedback (name, email, message, rating, suggestions)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, email, created_at`,
+      [name || null, email, message, rating ? parseInt(rating) : null || null, suggestions || null]
+    );
+    
+
+    console.log(`✅ Feedback received from: ${email}`);
+    console.log(`📝 Message: ${message.substring(0, 50)}...`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Feedback sent successfully',
+      feedback: result.rows[0]
     });
+
   } catch (error) {
-    console.error('❌ Ошибка обработки обратной связи:', error);
-    res.status(500).json({ error: 'Ошибка при отправке обратной связи' });
+    console.error('❌ Error saving feedback:', error);
+    res.status(500).json({
+      error: 'Failed to save feedback',
+      details: error.message
+    });
   }
 });
+
 
 // 🔍 ДЕБАГ
 app.get('/api/debug/models-check', (req, res) => {
@@ -1718,6 +1965,349 @@ app.get('/api/debug/models-check', (req, res) => {
     return res.json({ error: 'Папка не существует', path: modelsPath });
   }
 });
+
+// ========================
+// GARDEN ENDPOINTS
+// ========================
+
+// Инициализация таблицы garden_diary
+app.post('/api/garden/init-db', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS garden_diary (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        date DATE DEFAULT CURRENT_DATE,
+        title VARCHAR(255) NOT NULL,
+        text TEXT,
+        photo_url VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_garden_diary_user_id ON garden_diary(user_id);
+      CREATE INDEX IF NOT EXISTS idx_garden_diary_date ON garden_diary(date);
+    `);
+    res.json({ message: 'Garden diary table initialized successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Database initialization failed' });
+  }
+});
+
+
+// Задачи
+app.post('/api/garden/tasks', async (req, res) => {
+  try {
+    const { userId, title, dueDate, urgent, description } = req.body;
+    const result = await pool.query(
+      `INSERT INTO garden_tasks (user_id, title, due_date, completed, urgent, description)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [userId, title, dueDate, false, urgent || false, description || null]
+      //                        ↑ НОВАЯ ЗАДАЧА ВСЕГДА false
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Ошибка:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.get('/api/garden/tasks/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_tasks WHERE user_id = $1 ORDER BY due_date ASC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/garden/tasks/:taskId', async (req, res) => {
+  try {
+    const { completed } = req.body;
+    const result = await pool.query(
+      `UPDATE garden_tasks SET completed = $1 WHERE id = $2 RETURNING *`,
+      [completed, req.params.taskId]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/tasks/:taskId', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_tasks WHERE id = $1`, [req.params.taskId]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Полив
+app.post('/api/garden/watering', async (req, res) => {
+  try {
+    const { userId, plant, frequency, amount, description } = req.body;
+    const result = await pool.query(
+      `INSERT INTO garden_watering (user_id, plant, frequency, amount, description)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [userId, plant, frequency, amount || null, description || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/garden/watering/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_watering WHERE user_id = $1 ORDER BY created_at DESC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/watering/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_watering WHERE id = $1`, [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Удобрения
+app.post('/api/garden/fertilizer', async (req, res) => {
+  try {
+    const { userId, name, type, schedule, amount, description } = req.body;
+    const result = await pool.query(
+      `INSERT INTO garden_fertilizer (user_id, name, type, schedule, amount, description)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [userId, name, type || 'минеральное', schedule, amount || null, description || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/garden/fertilizer/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_fertilizer WHERE user_id = $1 ORDER BY created_at DESC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/fertilizer/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_fertilizer WHERE id = $1`, [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Дневник
+app.post('/api/garden/diary', async (req, res) => {
+  try {
+    const { userId, title, text, date } = req.body;
+
+    // ✅ Проверьте, что userId существует в users
+    const userCheck = await pool.query(
+      'SELECT id FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(400).json({ 
+        error: 'User not found', 
+        userId: userId 
+      });
+    }
+
+    // Только после проверки вставляйте запись
+    const result = await pool.query(
+      `INSERT INTO garden_diary (user_id, title, text, date) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING *`,
+      [userId, title, text, date]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error saving diary:', error);
+    res.status(500).json({ 
+      error: error.message,
+      code: error.code 
+    });
+  }
+});
+
+app.get('/api/garden/diary/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_diary WHERE user_id = $1 ORDER BY date DESC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/diary/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_diary WHERE id = $1`, [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Урожай
+app.post('/api/garden/harvest', async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
+    const result = await pool.query(
+      `INSERT INTO garden_harvest (user_id, amount)
+       VALUES ($1, $2) RETURNING *`,
+      [userId, parseFloat(amount)]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/garden/harvest/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM garden_harvest WHERE user_id = $1 ORDER BY date DESC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/garden/harvest/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM garden_harvest WHERE id = $1`, [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/community/posts', async (req, res) => {
+  try {
+    const { category } = req.query;
+    
+    let query = 'SELECT * FROM community_posts';
+    const params = [];
+    
+    if (category && (category === 'tips' || category === 'achievements')) {
+      query += ' WHERE category = $1';
+      params.push(category);
+    }
+    
+    query += ' ORDER BY created_at DESC LIMIT 50';
+    
+    const result = await pool.query(query, params);
+    
+    console.log(`📰 Community posts loaded: ${result.rows.length} (category: ${category || 'all'})`);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Error loading community posts:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/community/posts - Создать новый пост
+app.post('/api/community/posts', async (req, res) => {
+  try {
+    const { title, description, author, category, tags } = req.body;
+    
+    if (!title || !description || !author || !category) {
+      return res.status(400).json({ error: 'Title, description, author and category are required' });
+    }
+    
+    if (category !== 'tips' && category !== 'achievements') {
+      return res.status(400).json({ error: 'Category must be "tips" or "achievements"' });
+    }
+    
+    const result = await pool.query(
+      `INSERT INTO community_posts (title, description, author, category, tags)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [title, description, author, category, tags || []]
+    );
+    
+    console.log(`✅ Community post created: "${title}" by ${author}`);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Error creating community post:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/community/posts/:id/like - Лайкнуть пост
+app.put('/api/community/posts/:id/like', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      `UPDATE community_posts SET likes = likes + 1 WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    
+    console.log(`👍 Post ${id} liked (total: ${result.rows[0].likes})`);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Error liking post:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/community/posts/:id - Удалить пост
+app.delete('/api/community/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      `DELETE FROM community_posts WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    
+    console.log(`🗑️ Post ${id} deleted`);
+    res.json({ message: 'Post deleted successfully' });
+  } catch (error) {
+    console.error('❌ Error deleting post:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // ========================
 // START SERVER

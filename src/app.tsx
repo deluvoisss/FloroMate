@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useSelector } from 'react-redux';
 import type { RootState } from './store/store';
 import Header from './components/Header/Header';
+import ProtectedRoute from './components/ProtectedRoute';
 import MainPage from './pages/MainPage/MainPage';
 import LandscapeDesign from './pages/LandscapeDesign';
 import LandscapeConstructor from './pages/LandscapeConstructor';
@@ -30,17 +31,54 @@ const App: React.FC = () => {
         <Route path="/auth" element={<Auth />} />
 
         {/* Узнать по фото */}
-        <Route path="/recognition1" element={<PlantRecognition />} />
-        <Route path="/recognition2" element={<DiseaseDetection />} />
+        <Route
+          path="/recognition1"
+          element={
+            <ProtectedRoute requiredFeature="plantRecognition">
+              <PlantRecognition />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/recognition2"
+          element={
+            <ProtectedRoute requiredFeature="diseaseDetection">
+              <DiseaseDetection />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Мастерская ландшафта */}
-        <Route path="/landscapedesign" element={<LandscapeDesign />} />
-        <Route path="/konstructor" element={<LandscapeConstructor />} />
+        <Route
+          path="/landscapedesign"
+          element={
+            <ProtectedRoute requiredFeature="landscapeDesigner">
+              <LandscapeDesign />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/konstructor"
+          element={
+            <ProtectedRoute requiredFeature="landscapeConstructor">
+              <LandscapeConstructor />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Остальные страницы */}
         <Route path="/ourteam" element={<OurTeam />} />
-        <Route path="/privategarden" element={<PrivateGarden />} />
-        <Route path="/subscription" element={<Subscription />} />
+        <Route
+          path="/privategarden"
+          element={
+            <ProtectedRoute requiredFeature="personalGarden">
+              <PrivateGarden />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
 
         {/* Fallback маршрут */}
         <Route path="*" element={<Navigate to="/" replace />} />

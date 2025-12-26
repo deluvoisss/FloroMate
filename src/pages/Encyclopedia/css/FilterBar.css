@@ -382,7 +382,7 @@
     top: 60px;
     left: 0;
     height: calc(100vh - 60px);
-    z-index: 1000;
+    z-index: 90;
     box-shadow: 4px 0 20px rgba(72, 89, 53, 0.2);
   }
 

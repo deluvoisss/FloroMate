@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PixelTransition from '../components/PixelTransition/PixelTransition';
 import alinaPhoto from '../assets/team/alina.jpg';
 import dilyaraPhoto from '../assets/team/dilyara.jpg';
@@ -6,6 +6,10 @@ import artemPhoto from '../assets/team/artem.jpg';
 import './OurTeam.css';
 
 const OurTeam: React.FC = () => {
+  // Скроллим вверх при загрузке страницы
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
   const [feedbackForm, setFeedbackForm] = useState({
     name: '',
     email: '',
@@ -60,12 +64,18 @@ const OurTeam: React.FC = () => {
     setSubmitStatus(null);
 
     try {
-      const response = await fetch('/api/feedback', {
+      const response = await fetch('http://localhost:3001/api/feedback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(feedbackForm),
+        body: JSON.stringify({
+          name: feedbackForm.name || null,
+          email: feedbackForm.email || null,
+          message: feedbackForm.message,
+          rating: feedbackForm.rating ? parseInt(feedbackForm.rating) : null, // ✅
+          suggestions: feedbackForm.suggestions || null,
+        }),
       });
 
       const data = await response.json();
