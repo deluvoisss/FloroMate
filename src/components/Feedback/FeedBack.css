@@ -783,7 +783,7 @@
   .testimonials-carousel-track {
     display: flex;
     gap: var(--space-24);
-    animation: scroll 40s linear infinite;
+    animation: scroll 200s linear infinite;
     width: max-content;
   }
   
@@ -811,7 +811,7 @@
       transform: translateX(0);
     }
     100% {
-      transform: translateX(-50%);
+      transform: translateX(-20%);
     }
   }
   
@@ -932,3 +932,5 @@
       font-size: var(--font-size-xs);
     }
   }
+
+  
