@@ -448,7 +448,7 @@
 }
 
 .dropdown-item.logout {
-  color: #ff6b6b;
+  color: #FBFBFB;
 }
 
 .dropdown-item.logout:hover {
@@ -878,4 +878,70 @@
   .mobile-menu-item.mobile-menu-item-expanded .mobile-arrow {
     transform: rotate(180deg);
   }
+/* Locked dropdown items */
+.dropdown-item.locked {
+  opacity: 0.6;
+  cursor: not-allowed;
+  position: relative;
+}
+
+.dropdown-item.locked:hover {
+  background: rgba(147, 162, 103, 0.1);
+}
+
+.dropdown-item .lock-icon {
+  margin-left: 8px;
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+/* Subscription badge in user menu */
+.subscription-badge {
+  color: #FBFBFB;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  text-align: center;
+}
+
+.subscription-badge-free:hover {
+  transform: translateX(2px);
+}
+
+
+.subscription-badge-pro:hover {
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(147, 162, 103, 0.3);
+}
+
+
+.subscription-badge-pro_ultra:hover {
+  transform: translateX(2px);
+  box-shadow: 0 2px 12px rgba(138, 43, 226, 0.4);
+}
+
+.subscription-icon {
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.subscription-name {
+  letter-spacing: 0.3px;
+}
+
+.subscription-arrow {
+  font-size: 0.9em;
+  opacity: 1;
+  transition: transform 0.3s ease;
+}
+
+.subscription-badge:hover .subscription-arrow {
+  transform: translateX(3px);
 }

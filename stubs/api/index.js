@@ -190,6 +190,10 @@ app.post('/api/auth/init-db', async (req, res) => {
         phone VARCHAR(20) UNIQUE NOT NULL,
         username VARCHAR(50) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        subscription_type VARCHAR(20) DEFAULT 'free',
+        daily_requests INT DEFAULT 3,
+        used_requests INT DEFAULT 0,
+        last_request_reset DATE DEFAULT CURRENT_DATE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_login TIMESTAMP
       );
@@ -203,6 +207,7 @@ app.post('/api/auth/init-db', async (req, res) => {
     res.status(500).json({ error: 'Database initialization failed' });
   }
 });
+
 
 // Check username availability
 app.get('/api/auth/check-username', async (req, res) => {
@@ -301,9 +306,15 @@ app.post('/api/auth/verify-code', async (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         username: user.username,
-        phone: user.phone
+        phone: user.phone,
+        subscription: {
+          type: user.subscription_plan || 'free',
+          dailyRequests: user.subscription_plan === 'pro_ultra' ? 30 : 
+                         user.subscription_plan === 'pro' ? 10 : 3,
+          usedRequests: user.requests_used_today || 0
+        }
       }
-    });
+    });    
   } catch (error) {
     console.error('❌ Error verifying code:', error);
     if (error.code === '23505') {
@@ -393,14 +404,103 @@ app.post('/api/auth/login', async (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         username: user.username,
-        phone: user.phone
+        phone: user.phone,
+        subscription: {
+          type: user.subscription_plan || 'free',
+          dailyRequests: user.subscription_plan === 'pro_ultra' ? 30 : 
+                         user.subscription_plan === 'pro' ? 10 : 3,
+          usedRequests: user.requests_used_today || 0
+        }
       }
-    });
+    });    
   } catch (error) {
     console.error('❌ Login error:', error);
     res.status(500).json({ error: 'Login error' });
   }
 });
+
+// Upgrade subscription
+// Upgrade subscription
+app.post('/api/subscription/upgrade', async (req, res) => {
+  try {
+    const { userId, subscriptionType } = req.body;
+
+    if (!userId || !subscriptionType) {
+      return res.status(400).json({ error: 'Missing userId or subscriptionType' });
+    }
+
+    // Валидация типа подписки
+    const validTypes = ['free', 'pro', 'pro_ultra'];
+    if (!validTypes.includes(subscriptionType)) {
+      return res.status(400).json({ error: 'Invalid subscription type' });
+    }
+
+    // Определяем лимиты запросов
+    const dailyLimits = {
+      free: 3,
+      pro: 10,
+      pro_ultra: 30
+    };
+
+    // Получаем текущую подписку (используем subscription_plan вместо subscription_type)
+    const currentUser = await pool.query(
+      'SELECT subscription_plan FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (currentUser.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const currentType = currentUser.rows[0].subscription_plan || 'free';
+    const tierOrder = { free: 0, pro: 1, pro_ultra: 2 };
+
+    // Проверка: можно ли апгрейдить
+    if (tierOrder[subscriptionType] <= tierOrder[currentType]) {
+      return res.status(400).json({ 
+        error: 'Cannot downgrade or purchase same subscription',
+        currentSubscription: currentType
+      });
+    }
+
+    // Обновляем подписку (используем правильные имена колонок)
+    const result = await pool.query(
+      `UPDATE users 
+       SET subscription_plan = $1, 
+           requests_used_today = 0,
+           subscription_start_date = CURRENT_TIMESTAMP,
+           last_request_date = CURRENT_DATE
+       WHERE id = $2 
+       RETURNING id, first_name, last_name, username, phone, 
+                 subscription_plan, requests_used_today`,
+      [subscriptionType, userId]
+    );
+
+    const user = result.rows[0];
+
+    console.log(`✅ User ${user.username} upgraded to ${subscriptionType}`);
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        username: user.username,
+        phone: user.phone,
+        subscription: {
+          type: user.subscription_plan,
+          dailyRequests: dailyLimits[subscriptionType],
+          usedRequests: user.requests_used_today || 0
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ Subscription upgrade error:', error);
+    res.status(500).json({ error: 'Failed to upgrade subscription' });
+  }
+});
+
 
 // ========================
 // PLANT DATABASE ROUTES
@@ -990,26 +1090,65 @@ app.post('/api/plants/enrich', async (req, res) => {
 app.post('/api/chat', async (req, res) => {
   try {
     console.log('💬 Chat request received');
-    const { messages } = req.body;
+    const { messages, userId } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Invalid message format' });
+    }
+
+    // Проверяем лимит запросов если передан userId
+    if (userId) {
+      const user = await pool.query(
+        'SELECT subscription_plan, requests_used_today, last_request_date FROM users WHERE id = $1',
+        [userId]
+      );
+
+      if (user.rows.length > 0) {
+        const userData = user.rows[0];
+        const today = new Date().toISOString().split('T')[0];
+        const lastRequestDate = userData.last_request_date 
+          ? new Date(userData.last_request_date).toISOString().split('T')[0]
+          : null;
+
+        // Сброс счетчика если новый день
+        let usedRequests = userData.requests_used_today || 0;
+        if (lastRequestDate !== today) {
+          usedRequests = 0;
+        }
+
+        // Проверка лимита
+        const limits = { free: 3, pro: 10, pro_ultra: 30 };
+        const userLimit = limits[userData.subscription_plan] || 3;
+
+        if (usedRequests >= userLimit) {
+          return res.status(429).json({ 
+            error: `Достигнут дневной лимит запросов (${userLimit})` 
+          });
+        }
+
+        // Увеличиваем счетчик
+        await pool.query(
+          `UPDATE users 
+           SET requests_used_today = $1, 
+               last_request_date = CURRENT_DATE 
+           WHERE id = $2`,
+          [usedRequests + 1, userId]
+        );
+      }
     }
 
     const accessToken = await getAccessToken();
 
     const systemMessage = {
       role: 'system',
-      content: `Ты — профессиональный ботаник и эксперт по растениям. 
+      content: `Ты — профессиональный ботаник и эксперт по растениям.
 Отвечай кратко (2-4 предложения) на вопросы о:
 - Уходе за растениями (полив, свет, температура, влажность)
 - Болезнях и вредителях
 - Размножении и пересадке
 - Выборе растений для дома и сада
 - Совместимости растений
-
 Используй эмодзи: 🌱🌿🌸🪴💧☀️🌡️
-
 Если вопрос НЕ о растениях — вежливо откажи и попроси задать вопрос о растениях.`
     };
 
@@ -1033,6 +1172,7 @@ app.post('/api/chat', async (req, res) => {
 
     const aiResponse = response.data.choices[0].message.content;
     console.log('✅ GigaChat response received');
+
     res.json({ response: aiResponse });
 
   } catch (error) {
@@ -1043,6 +1183,7 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 });
+
 
 app.post('/api/plants/enrich', async (req, res) => {
   try {

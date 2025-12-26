@@ -31,16 +31,53 @@ const App: React.FC = () => {
         <Route path="/auth" element={<Auth />} />
 
         {/* Узнать по фото */}
-        <Route path="/recognition1" element={<ProtectedRoute><PlantRecognition /></ProtectedRoute>} />
-        <Route path="/recognition2" element={<ProtectedRoute><DiseaseDetection /></ProtectedRoute>} />
+        <Route
+          path="/recognition1"
+          element={
+            <ProtectedRoute requiredFeature="plantRecognition">
+              <PlantRecognition />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/recognition2"
+          element={
+            <ProtectedRoute requiredFeature="diseaseDetection">
+              <DiseaseDetection />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Мастерская ландшафта */}
-        <Route path="/landscapedesign" element={<ProtectedRoute><LandscapeDesign /></ProtectedRoute>} />
-        <Route path="/konstructor" element={<ProtectedRoute><LandscapeConstructor /></ProtectedRoute>} />
+        <Route
+          path="/landscapedesign"
+          element={
+            <ProtectedRoute requiredFeature="landscapeDesigner">
+              <LandscapeDesign />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/konstructor"
+          element={
+            <ProtectedRoute requiredFeature="landscapeConstructor">
+              <LandscapeConstructor />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Остальные страницы */}
         <Route path="/ourteam" element={<OurTeam />} />
-        <Route path="/privategarden" element={<ProtectedRoute><PrivateGarden /></ProtectedRoute>} />
+        <Route
+          path="/privategarden"
+          element={
+            <ProtectedRoute requiredFeature="personalGarden">
+              <PrivateGarden />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
 
         {/* Fallback маршрут */}
