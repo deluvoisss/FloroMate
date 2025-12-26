@@ -878,6 +878,7 @@
   .mobile-menu-item.mobile-menu-item-expanded .mobile-arrow {
     transform: rotate(180deg);
   }
+}
 /* Locked dropdown items */
 .dropdown-item.locked {
   opacity: 0.6;

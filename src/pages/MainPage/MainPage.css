@@ -456,17 +456,19 @@
   }
 }
 
-  /* ============ FOOTER CTA ============ */
-  /* ============ FOOTER CTA SECTION ============ */
+ /* ============ FOOTER CTA SECTION ============ */
 .footer-cta {
   width: 100%;
   background: linear-gradient(135deg, #c5ddb4 0%, #b8d9a6 25%, #abd59a 50%, #9ed18c 75%, #91cd7e 100%);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-top: 1px solid rgba(202, 219, 173, 0.3);
-  padding: 20px 10px 20px 40px;
+  padding: 30px 40px;
   position: relative;
   overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .footer-cta::before {
@@ -481,22 +483,24 @@
 }
 
 .footer-content {
-  max-width: 300px;
-  margin: 0;
+  max-width: 100%;
   position: relative;
   z-index: 1;
 }
 
 .footer-main-row {
   display: flex;
-  gap: 80px;
+  flex-direction: row;
+  gap: 120px;
   align-items: flex-start;
+  justify-content: center;
 }
 
 .footer-info {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  align-items: center;
   flex: 0 0 auto;
 }
 
@@ -506,12 +510,14 @@
   color: #2d3728;
   margin: 0;
   letter-spacing: -0.5px;
+  text-align: center;
 }
 
 .footer-links {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  align-items: center;
 }
 
 .footer-link {
@@ -548,7 +554,7 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  align-items: flex-start;
+  align-items: center;
   flex: 0 0 auto;
 }
 
@@ -562,7 +568,9 @@
   border-radius: 12px;
   padding: 12px 24px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  text-align: center;
 }
+
 .social-link img {
   width: 24px;
   height: 24px;
@@ -584,6 +592,7 @@
 .social-icons {
   display: flex;
   gap: 12px;
+  justify-content: center;
 }
 
 .social-link {
@@ -640,20 +649,20 @@
   z-index: 1;
 }
 
-/* ============ RESPONSIVE ============ */
+/* ============ RESPONSIVE FOOTER ============ */
 @media (max-width: 1024px) {
   .footer-cta {
-    padding: 60px 30px 40px 30px;
+    padding: 60px 30px;
   }
 
   .footer-main-row {
-    gap: 60px;
+    gap: 80px;
   }
 }
 
 @media (max-width: 768px) {
   .footer-cta {
-    padding: 50px 20px 30px 20px;
+    padding: 50px 20px;
   }
 
   .footer-content {
@@ -680,7 +689,7 @@
 
 @media (max-width: 480px) {
   .footer-cta {
-    padding: 40px 16px 24px 16px;
+    padding: 40px 16px;
   }
 
   .footer-main-row {
@@ -702,8 +711,6 @@
   }
 }
 
-
-  
   /* ============ RESPONSIVE ============ */
   @media (max-width: 1024px) {
     .hero {

@@ -17,96 +17,128 @@ import vkIcon from '../../image/vk.svg';
 
 const MainPage: React.FC = () => {
   const handleAnimationComplete = () => {
-  console.log('Animation completed!');
-};
-  useEffect(() => {
-  const track = document.getElementById('features-carousel-track') as HTMLDivElement | null;
-  const dotsContainer = document.getElementById('carousel-dots');
-  const prevBtn = document.getElementById('prev-btn');
-  const nextBtn = document.getElementById('next-btn');
-
-  if (!track || !dotsContainer || !prevBtn || !nextBtn) return;
-
-  const cards = Array.from(track.children) as HTMLDivElement[];
-  const cardCount = cards.length;
-  let currentIndex = 0;
-
-  // Создаём точки
-  dotsContainer.innerHTML = '';
-  for (let i = 0; i < cardCount; i++) {
-    const dot = document.createElement('div');
-    dot.classList.add('carousel-dot');
-    if (i === 0) dot.classList.add('active');
-    dot.addEventListener('click', () => goToSlide(i));
-    dotsContainer.appendChild(dot);
-  }
-
-  const dots = Array.from(dotsContainer.children) as HTMLDivElement[];
-
- function updateCarousel() {
-  const cardWidth = cards[0].offsetWidth;
-  const gap = 24;
-  const containerWidth = (track.parentElement as HTMLDivElement).offsetWidth;
-
-  const offset =
-    currentIndex * (cardWidth + gap)
-    - (containerWidth - cardWidth) / 2;
-
-  track.style.transform = `translateX(${-offset}px)`;
-
-  dots.forEach((dot, i) => {
-    dot.classList.toggle('active', i === currentIndex);
-  });
-}
-
-
-  function goToSlide(index: number) {
-    currentIndex = index;
-    updateCarousel();
-  }
-
-  function nextSlide() {
-    if (currentIndex < cardCount - 1) {
-      currentIndex++;
-    } else {
-      currentIndex = 0; // возвращаемся к первой
-    }
-    updateCarousel();
-  }
-
-  function prevSlide() {
-    if (currentIndex > 0) {
-      currentIndex--;
-    } else {
-      currentIndex = cardCount - 1; // к последней
-    }
-    updateCarousel();
-  }
-
-  prevBtn.addEventListener('click', prevSlide);
-  nextBtn.addEventListener('click', nextSlide);
-
-  // Автопрокрутка
-  let autoplayInterval = setInterval(nextSlide, 4500);
-
-  // Пауза при наведении
-  const container = track.parentElement!;
-  container.addEventListener('mouseenter', () => clearInterval(autoplayInterval));
-  container.addEventListener('mouseleave', () => {
-    autoplayInterval = setInterval(nextSlide, 4500);
-  });
-
-  // Адаптивность
-  const resizeHandler = () => updateCarousel();
-  window.addEventListener('resize', resizeHandler);
-
-  updateCarousel();
-
-  return () => {
-    clearInterval(autoplayInterval);
-    window.removeEventListener('resize', resizeHandler);
+    console.log('Animation completed!');
   };
-}, []);
+
+  useEffect(() => {
+    const track = document.getElementById('features-carousel-track') as HTMLDivElement | null;
+    const dotsContainer = document.getElementById('carousel-dots');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+
+    if (!track || !dotsContainer || !prevBtn || !nextBtn) return;
+
+    const cards = Array.from(track.children) as HTMLDivElement[];
+    const cardCount = cards.length;
+    const cardWidth = 320;
+    const gap = 24;
+    const totalWidth = cardWidth + gap;
+    
+    let currentIndex = 0;
+
+    // Клонируем карточки для бесконечного эффекта
+    function initInfiniteCarousel() {
+      // Клонируем в конец
+      for (let i = 0; i < cardCount; i++) {
+        const clone = cards[i].cloneNode(true);
+        track.appendChild(clone);
+      }
+      
+      // Клонируем в начало
+      for (let i = cardCount - 1; i >= 0; i--) {
+        const clone = cards[i].cloneNode(true);
+        track.insertBefore(clone, track.firstChild);
+      }
+      
+      currentIndex = cardCount;
+      track.style.transform = `translateX(-${currentIndex * totalWidth}px)`;
+    }
+
+    // Создаём точки (только для оригинальных карточек)
+    dotsContainer.innerHTML = '';
+    for (let i = 0; i < cardCount; i++) {
+      const dot = document.createElement('div');
+      dot.classList.add('carousel-dot');
+      if (i === 0) dot.classList.add('active');
+      dot.addEventListener('click', () => goToSlide(i));
+      dotsContainer.appendChild(dot);
+    }
+
+    const dots = Array.from(dotsContainer.children) as HTMLDivElement[];
+
+    function updateDots() {
+      const visibleIndex = currentIndex % cardCount;
+      dots.forEach((dot, i) => {
+        dot.classList.toggle('active', i === visibleIndex);
+      });
+    }
+
+    function moveCarousel(direction: number) {
+      currentIndex += direction;
+      track.style.transition = 'transform 0.3s ease';
+      track.style.transform = `translateX(-${currentIndex * totalWidth}px)`;
+
+      setTimeout(() => {
+        // Если прошли всех клонов в конце — прыгаем в начало
+        if (currentIndex >= cardCount * 2) {
+          track.style.transition = 'none';
+          currentIndex = cardCount;
+          track.style.transform = `translateX(-${currentIndex * totalWidth}px)`;
+        }
+        // Если прошли всех клонов в начале — прыгаем в конец
+        else if (currentIndex < cardCount) {
+          track.style.transition = 'none';
+          currentIndex = cardCount * 2 - 1;
+          track.style.transform = `translateX(-${currentIndex * totalWidth}px)`;
+        }
+      }, 300);
+
+      updateDots();
+    }
+
+    function goToSlide(index: number) {
+      currentIndex = cardCount + index;
+      moveCarousel(0);
+    }
+
+    function nextSlide() {
+      moveCarousel(1);
+    }
+
+    function prevSlide() {
+      moveCarousel(-1);
+    }
+
+    // Инициализация
+    initInfiniteCarousel();
+    updateDots();
+
+    prevBtn.addEventListener('click', prevSlide);
+    nextBtn.addEventListener('click', nextSlide);
+
+    // Автопрокрутка каждые 4.5 секунды
+    let autoplayInterval = setInterval(nextSlide, 4500);
+
+    // Пауза при наведении
+    const container = track.parentElement!;
+    container.addEventListener('mouseenter', () => clearInterval(autoplayInterval));
+    container.addEventListener('mouseleave', () => {
+      autoplayInterval = setInterval(nextSlide, 4500);
+    });
+
+    // Адаптивность
+    const resizeHandler = () => {
+      // Пересчитать при resize если нужно
+    };
+    window.addEventListener('resize', resizeHandler);
+
+    return () => {
+      clearInterval(autoplayInterval);
+      window.removeEventListener('resize', resizeHandler);
+      prevBtn.removeEventListener('click', prevSlide);
+      nextBtn.removeEventListener('click', nextSlide);
+    };
+  }, []);
   return (
     
     <div className="main-page">
