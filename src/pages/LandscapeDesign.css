@@ -380,14 +380,15 @@
 }
 
 /* Toast уведомление */
+/* Toast уведомление */
 .toast {
   position: fixed;
   bottom: 30px;
   left: 50%;
   transform: translateX(-50%) translateY(100px);
-  max-width: 600px;
-  width: calc(100% - 40px);
-  z-index: 1000;
+  max-width: 500px;
+  width: 90%;
+  z-index: 999;
   opacity: 0;
   transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   pointer-events: none;
@@ -454,6 +455,39 @@
   opacity: 1;
   background: rgba(147, 162, 103, 0.1);
   transform: scale(1.1);
+}
+
+/* Мобильные устройства (до 768px) */
+@media (max-width: 768px) {
+  .toast {
+    bottom: 20px;
+    left: 50%;
+    right: auto;
+    width: 90%;
+    max-width: 500px;
+    transform: translateX(-50%) translateY(100px);
+  }
+
+  .toast-visible {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .toast-hidden {
+    transform: translateX(-50%) translateY(100px);
+  }
+
+  .toast-content {
+    padding: 14px 16px;
+    border-radius: 12px;
+  }
+
+  .toast-message {
+    font-size: 0.875rem;
+  }
+
+  .toast-icon {
+    font-size: 1.3rem;
+  }
 }
 
 /* Планшеты (768px - 1024px) */
@@ -606,7 +640,7 @@
 
   .toast {
     bottom: 20px;
-    left: 10px;
+    left: -20px;
     right: 10px;
     width: auto;
     max-width: none;

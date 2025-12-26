@@ -682,4 +682,4 @@ const isLandscapeActive = location.pathname === '/floromate/landscapedesign' ||
   );
 };
 
-export default React.memo(Header);
+export default Header;

@@ -3,7 +3,13 @@
     background: linear-gradient(180deg, #f5f7f2 0%, #eef1ec 50%, #e8eddf 100%);
     overflow-x: hidden;
   }
-  
+  .main-page {
+  cursor: none;
+}
+
+.main-page * {
+  cursor: none !important;
+}
   /* ============ HERO SECTION ============ */
   .hero {
     min-height: calc(100vh - 70px);
@@ -672,18 +678,35 @@
   .footer-main-row {
     flex-direction: column;
     gap: 40px;
+    align-items: center;  /* Добавляем центрирование */
+  }
+
+  .footer-info {
+    width: 100%;
+    align-items: center;  /* Центруем содержимое блока */
   }
 
   .footer-info h3 {
     font-size: 1.1rem;
+    text-align: center;
   }
 
   .footer-links {
     gap: 10px;
+    align-items: center;  /* Центруем ссылки */
   }
 
   .footer-link {
     font-size: 0.9rem;
+  }
+
+  .footer-social {
+    width: 100%;
+    align-items: center;  /* Центруем соцсети */
+  }
+
+  .social-brand {
+    width: fit-content;
   }
 }
 
@@ -694,10 +717,17 @@
 
   .footer-main-row {
     gap: 30px;
+    align-items: center;
   }
 
   .footer-info h3 {
     font-size: 1rem;
+    text-align: center;
+  }
+
+  .footer-social {
+    width: 100%;
+    align-items: center;
   }
 
   .social-link {
@@ -705,11 +735,13 @@
     height: 40px;
   }
 
-  .social-link svg {
+  .social-link svg,
+  .social-link img {
     width: 20px;
     height: 20px;
   }
 }
+
 
   /* ============ RESPONSIVE ============ */
   @media (max-width: 1024px) {
@@ -807,11 +839,11 @@
       padding: 25px;
     }
     .carousel-btn {
-    top: 140px;           /* центр картинки */
-    transform: translateY(-50%);
-     width: 42px;
-    height: 42px;
-    font-size: 1.6rem;
+    display: none !important;
+  }
+
+  .carousel-dots {
+    margin-top: 20px;
   }
   }
   
@@ -848,5 +880,8 @@
     .feature-icon {
       font-size: 2.5rem;
     }
+    
+    .carousel-btn {
+    display: none !important;
   }
-  
+}
