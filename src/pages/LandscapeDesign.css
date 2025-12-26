@@ -1,39 +1,94 @@
 .landscape-design-page {
   min-height: calc(100vh - 70px);
-  background: #f5f7fa;
+  background: linear-gradient(180deg, #f0f4e8 0%, #e8f0d9 50%, #dfe8ce 100%);
   padding: 40px 20px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Decorative Plants */
+.decorative-plants-landscape {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 70px;
+  left: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.deco-plant-landscape {
+  position: absolute;
+  font-size: 100px;
+  opacity: 0.08;
+  animation: float 8s ease-in-out infinite;
+}
+
+.deco-1-landscape {
+  top: 10%;
+  left: 5%;
+  animation-delay: 0s;
+}
+
+.deco-2-landscape {
+  top: 60%;
+  right: 10%;
+  font-size: 120px;
+  animation-delay: 2s;
+}
+
+.deco-3-landscape {
+  bottom: 10%;
+  left: 15%;
+  animation-delay: 4s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(30px);
+  }
 }
 
 .landscape-container {
   max-width: 1200px;
   width: 100%;
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(147, 162, 103, 0.15);
   padding: 40px;
   margin-top: 0;
+  position: relative;
+  z-index: 10;
 }
 
 .landscape-header {
   text-align: center;
   margin-bottom: 40px;
+  padding-bottom: 30px;
+  border-bottom: 2px solid #f0f4e8;
 }
 
 .landscape-header h1 {
   font-size: 2.5rem;
-  color: #2d3748;
+  color: #2d3728;
   margin-bottom: 1rem;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: -1px;
 }
 
 .subtitle {
   font-size: 1.1rem;
-  color: #718096;
+  color: #5a6b47;
   margin-bottom: 0;
   line-height: 1.6;
+  font-weight: 500;
 }
 
 .landscape-form {
@@ -44,7 +99,7 @@
   display: block;
   font-size: 1rem;
   font-weight: 600;
-  color: #2d3748;
+  color: #2d3728;
   margin-bottom: 12px;
 }
 
@@ -53,13 +108,13 @@
 }
 
 .dropzone {
-  border: 2px dashed #cbd5e0;
+  border: 3px dashed #CADBAD;
   border-radius: 12px;
   padding: 40px 20px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  background: #f7fafc;
+  background: linear-gradient(135deg, #f5f9ee 0%, #f0f6e8 100%);
   min-height: 250px;
   display: flex;
   align-items: center;
@@ -68,7 +123,8 @@
 
 .dropzone:hover {
   border-color: #93A267;
-  background: #edf2f7;
+  background: linear-gradient(135deg, #eef3e6 0%, #e8ede0 100%);
+  transform: translateY(-2px);
 }
 
 .dropzone-content {
@@ -78,18 +134,19 @@
 .dropzone-icon {
   font-size: 3.5rem;
   margin-bottom: 1rem;
+  color: #93A267;
 }
 
 .dropzone-text {
   font-size: 1.1rem;
-  color: #4a5568;
+  color: #5a6b47;
   margin-bottom: 0.5rem;
   font-weight: 500;
 }
 
 .dropzone-hint {
   font-size: 0.9rem;
-  color: #a0aec0;
+  color: #7a8d5f;
 }
 
 .preview-container {
@@ -105,6 +162,7 @@
   border-radius: 12px;
   max-height: 500px;
   object-fit: contain;
+  border: 2px solid #CADBAD;
 }
 
 .preview-overlay {
@@ -113,7 +171,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(45, 55, 40, 0.5);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -139,12 +197,12 @@
 .prompt-input {
   width: 100%;
   padding: 14px 16px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #CADBAD;
   border-radius: 12px;
   font-size: 1rem;
   font-family: inherit;
-  color: #2d3748;
-  background: #f7fafc;
+  color: #2d3728;
+  background: linear-gradient(135deg, #f5f9ee 0%, #f0f6e8 100%);
   resize: vertical;
   transition: all 0.3s ease;
   line-height: 1.5;
@@ -155,12 +213,12 @@
   outline: none;
   border-color: #93A267;
   background: white;
-  box-shadow: 0 0 0 3px rgba(147, 162, 103, 0.1);
+  box-shadow: 0 0 0 3px rgba(147, 162, 103, 0.15);
 }
 
 .prompt-hint {
   font-size: 0.875rem;
-  color: #718096;
+  color: #5a6b47;
   margin-top: 8px;
   line-height: 1.5;
 }
@@ -171,24 +229,37 @@
   margin-bottom: 20px;
   font-weight: 500;
   text-align: center;
+  border-left: 5px solid;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .status-success {
-  background: #c6f6d5;
-  color: #22543d;
-  border: 1px solid #9ae6b4;
+  background: #d4edda;
+  color: #155724;
+  border-left-color: #28a745;
 }
 
 .status-error {
-  background: #fed7d7;
-  color: #742a2a;
-  border: 1px solid #fc8181;
+  background: #f8d7da;
+  color: #721c24;
+  border-left-color: #dc3545;
 }
 
 .status-info {
-  background: #bee3f8;
-  color: #2c5282;
-  border: 1px solid #90cdf4;
+  background: #fff3cd;
+  color: #856404;
+  border-left-color: #ffc107;
 }
 
 .button-group {
@@ -217,15 +288,15 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #CADBAD 0%, #A8C66C 100%);
-  color: #2d3728;
-  box-shadow: 0 4px 15px rgba(202, 219, 173, 0.4);
+  background: linear-gradient(135deg, #93A267 0%, #6b8d3b 100%);
+  color: white;
+  box-shadow: 0 6px 20px rgba(147, 162, 103, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(202, 219, 173, 0.5);
-  background: linear-gradient(135deg, #D4E5B4 0%, #B8D67C 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(147, 162, 103, 0.4);
+  background: linear-gradient(135deg, #9eb878 0%, #7a9c4a 100%);
 }
 
 .btn-primary:disabled {
@@ -234,48 +305,63 @@
 }
 
 .btn-secondary {
-  background: #e2e8f0;
-  color: #2d3748;
+  background: #f0f4e8;
+  color: #5a6b47;
+  border: 2px solid #CADBAD;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #cbd5e0;
-  transform: translateY(-2px);
+  background: #e8ede0;
+  border-color: #93A267;
+  transform: translateY(-3px);
 }
 
 .btn-download {
-  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  background: linear-gradient(135deg, #93A267 0%, #6b8d3b 100%);
   color: white;
-  box-shadow: 0 4px 15px rgba(72, 187, 120, 0.4);
+  box-shadow: 0 6px 20px rgba(147, 162, 103, 0.3);
 }
 
 .btn-download:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(72, 187, 120, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(147, 162, 103, 0.4);
 }
 
 .result-section {
   margin-top: 40px;
   padding-top: 40px;
-  border-top: 2px solid #e2e8f0;
+  border-top: 2px solid #CADBAD;
   text-align: center;
   scroll-margin-top: 20px;
+  animation: slideUp 0.4s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .result-section h2 {
   font-size: 2rem;
-  color: #2d3748;
+  color: #2d3728;
   margin-bottom: 24px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .result-image-container {
   margin-bottom: 24px;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  background: #f7fafc;
+  box-shadow: 0 8px 24px rgba(147, 162, 103, 0.2);
+  background: white;
   padding: 16px;
+  border: 2px solid #CADBAD;
 }
 
 .result-image {
@@ -320,11 +406,11 @@
 }
 
 .toast-content {
-  background: linear-gradient(135deg, #fff5e6 0%, #ffe8cc 100%);
-  border: 2px solid #f6ad55;
+  background: linear-gradient(135deg, #e8f5e0 0%, #dfe8ce 100%);
+  border: 2px solid #93A267;
   border-radius: 16px;
   padding: 18px 20px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 40px rgba(147, 162, 103, 0.2);
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -339,7 +425,7 @@
 
 .toast-message {
   flex: 1;
-  color: #744210;
+  color: #2d3728;
   font-size: 0.95rem;
   line-height: 1.5;
   font-weight: 500;
@@ -348,7 +434,7 @@
 .toast-close {
   background: none;
   border: none;
-  color: #744210;
+  color: #5a6b47;
   font-size: 1.8rem;
   line-height: 1;
   cursor: pointer;
@@ -366,7 +452,7 @@
 
 .toast-close:hover {
   opacity: 1;
-  background: rgba(116, 66, 16, 0.1);
+  background: rgba(147, 162, 103, 0.1);
   transform: scale(1.1);
 }
 
@@ -393,7 +479,7 @@
 /* Мобильные устройства (до 768px) */
 @media (max-width: 768px) {
   .landscape-design-page {
-    padding: 20px 10px;
+    padding: 20px 15px;
   }
 
   .landscape-container {
@@ -403,6 +489,7 @@
 
   .landscape-header {
     margin-bottom: 30px;
+    padding-bottom: 20px;
   }
 
   .landscape-header h1 {
@@ -545,6 +632,10 @@
 
   .toast-icon {
     font-size: 1.3rem;
+  }
+
+  .deco-plant-landscape {
+    font-size: 60px;
   }
 }
 

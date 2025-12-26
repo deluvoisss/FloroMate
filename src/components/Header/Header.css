@@ -864,6 +864,20 @@
   }
 }
 
+@media (max-width: 768px) {
+  .mobile-submenu {
+    max-height: 500px;
+    opacity: 1;
+    display: block;
+  }
+
+  .mobile-menu-item .mobile-arrow {
+    transition: transform 0.3s ease;
+  }
+
+  .mobile-menu-item.mobile-menu-item-expanded .mobile-arrow {
+    transform: rotate(180deg);
+  }
 /* Locked dropdown items */
 .dropdown-item.locked {
   opacity: 0.6;

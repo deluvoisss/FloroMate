@@ -740,36 +740,33 @@
   /* END PERPLEXITY DESIGN SYSTEM */
   /* ============ TESTIMONIALS SECTION ============ */
   .testimonials {
-    padding: var(--space-32) var(--space-32);
-    max-width: var(--container-xl);
-    margin: 0 auto;
-    background: linear-gradient(180deg, var(--color-background) 0%, var(--color-surface) 50%, var(--color-secondary) 100%);
-  }
+  padding: var(--space-32) var(--space-16); /* уменьшим боковые padding'и для мобильных, но сохраним сверху/снизу */
+  width: 100%; /* полная ширина экрана */
+  max-width: none; /* снимаем ограничение 1280px */
+  margin: 0; /* убираем авто-центрирование */
+  background: linear-gradient(180deg, var(--color-background) 0%, var(--color-surface) 50%, var(--color-secondary) 100%);
+}
   
   .section-title {
-    font-size: var(--font-size-4xl);
-    text-align: center;
-    color: var(--color-text);
-    margin: 0 0 var(--space-32) 0;
-    font-weight: var(--font-weight-bold);
-    position: relative;
-    padding-bottom: var(--space-20);
-    line-height: var(--line-height-tight);
-    letter-spacing: var(--letter-spacing-tight);
-  }
-  
-  .section-title::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80px;
-    height: 4px;
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
-    border-radius: var(--radius-sm);
-  }
-  
+  font-size: var(--font-size-4xl);
+  text-align: center;
+  color: var(--color-text);
+  margin: 0 auto 10px auto;
+  width: fit-content;
+  max-width: 100%;
+  display: block;
+  font-weight: var(--font-weight-bold);
+  position: relative;  /* ← оставляем */
+  padding-bottom: var(--space-20);  /* ← оставляем место для полосы */
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.section-title::after {
+  display: none;  /* ← Убираем полоску */
+}
+
+
   /* ============ CAROUSEL STYLES ============ */
   .testimonials-carousel-wrapper {
     width: 100%;
@@ -794,6 +791,13 @@
     flex: 0 0 auto;
     width: 300px;
     transition: all var(--duration-normal) var(--ease-standard);
+     background: radial-gradient(circle at top left,
+      rgba(255, 255, 255, 0.20) 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0.02) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   }
   
   .testimonial-carousel-card:hover {
