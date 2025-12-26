@@ -175,5 +175,7 @@ src/
 public/                 # Статические файлы
 
 tsconfig.json           # Конфиг TypeScript
+
 bro.config.js           # Конфиг Bro.js
+
 package.json            # Зависимости и скрипты
