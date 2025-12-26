@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import './Feedback.css';
+import './FeedBack.css';
 
 interface FeedbackItem {
   id: number;
