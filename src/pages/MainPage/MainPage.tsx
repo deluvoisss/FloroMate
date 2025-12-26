@@ -20,7 +20,7 @@ const MainPage: React.FC = () => {
     console.log('Animation completed!');
   };
 
-  useEffect(() => {
+ useEffect(() => {
     const track = document.getElementById('features-carousel-track') as HTMLDivElement | null;
     const dotsContainer = document.getElementById('carousel-dots');
     const prevBtn = document.getElementById('prev-btn');
@@ -35,16 +35,15 @@ const MainPage: React.FC = () => {
     const totalWidth = cardWidth + gap;
     
     let currentIndex = 0;
+    let isAnimating = false;
 
     // Клонируем карточки для бесконечного эффекта
     function initInfiniteCarousel() {
-      // Клонируем в конец
       for (let i = 0; i < cardCount; i++) {
         const clone = cards[i].cloneNode(true);
         track.appendChild(clone);
       }
       
-      // Клонируем в начало
       for (let i = cardCount - 1; i >= 0; i--) {
         const clone = cards[i].cloneNode(true);
         track.insertBefore(clone, track.firstChild);
@@ -54,7 +53,7 @@ const MainPage: React.FC = () => {
       track.style.transform = `translateX(-${currentIndex * totalWidth}px)`;
     }
 
-    // Создаём точки (только для оригинальных карточек)
+    // Создаём точки
     dotsContainer.innerHTML = '';
     for (let i = 0; i < cardCount; i++) {
       const dot = document.createElement('div');
@@ -74,23 +73,25 @@ const MainPage: React.FC = () => {
     }
 
     function moveCarousel(direction: number) {
+      if (isAnimating) return; // ← Блокируем если уже крутится
+      
+      isAnimating = true;
       currentIndex += direction;
       track.style.transition = 'transform 0.3s ease';
       track.style.transform = `translateX(-${currentIndex * totalWidth}px)`;
 
       setTimeout(() => {
-        // Если прошли всех клонов в конце — прыгаем в начало
         if (currentIndex >= cardCount * 2) {
           track.style.transition = 'none';
           currentIndex = cardCount;
           track.style.transform = `translateX(-${currentIndex * totalWidth}px)`;
         }
-        // Если прошли всех клонов в начале — прыгаем в конец
         else if (currentIndex < cardCount) {
           track.style.transition = 'none';
           currentIndex = cardCount * 2 - 1;
           track.style.transform = `translateX(-${currentIndex * totalWidth}px)`;
         }
+        isAnimating = false; // ← Разблокируем после анимации
       }, 300);
 
       updateDots();
@@ -109,36 +110,41 @@ const MainPage: React.FC = () => {
       moveCarousel(-1);
     }
 
+    // Обработчик свайпа тачпадом с повышенной чувствительностью
+    let wheelDelta = 0;
+    function handleWheel(e: WheelEvent) {
+      wheelDelta += e.deltaX;
+      
+      // Требуем больший скролл для переключения (от 100px)
+      if (Math.abs(wheelDelta) > 50) {
+        if (wheelDelta > 0) {
+          nextSlide();
+        } else {
+          prevSlide();
+        }
+        wheelDelta = 0; // Сбрасываем счётчик
+      }
+    }
+
     // Инициализация
     initInfiniteCarousel();
     updateDots();
 
     prevBtn.addEventListener('click', prevSlide);
     nextBtn.addEventListener('click', nextSlide);
+    track.parentElement?.addEventListener('wheel', handleWheel, { passive: true });
 
-    // Автопрокрутка каждые 4.5 секунды
-    let autoplayInterval = setInterval(nextSlide, 4500);
-
-    // Пауза при наведении
-    const container = track.parentElement!;
-    container.addEventListener('mouseenter', () => clearInterval(autoplayInterval));
-    container.addEventListener('mouseleave', () => {
-      autoplayInterval = setInterval(nextSlide, 4500);
-    });
-
-    // Адаптивность
-    const resizeHandler = () => {
-      // Пересчитать при resize если нужно
-    };
+    const resizeHandler = () => {};
     window.addEventListener('resize', resizeHandler);
 
     return () => {
-      clearInterval(autoplayInterval);
       window.removeEventListener('resize', resizeHandler);
       prevBtn.removeEventListener('click', prevSlide);
       nextBtn.removeEventListener('click', nextSlide);
+      track.parentElement?.removeEventListener('wheel', handleWheel);
     };
   }, []);
+
   return (
     
     <div className="main-page">

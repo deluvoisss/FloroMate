@@ -19,7 +19,6 @@ const ChatAssistant: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ← ДОБАВИТЬ: Получаем данные пользователя
   const user = useAppSelector((state) => state.auth.user);
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
   const userSubscription = user?.subscription;
@@ -35,7 +34,6 @@ const ChatAssistant: React.FC = () => {
   const sendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
 
-    // ← ДОБАВИТЬ: Проверка авторизации
     if (!isAuthenticated) {
       setMessages([...messages, {
         role: 'assistant',
@@ -44,7 +42,6 @@ const ChatAssistant: React.FC = () => {
       return;
     }
 
-    // ← ДОБАВИТЬ: Проверка лимита запросов
     if (userSubscription && userSubscription.usedRequests >= userSubscription.dailyRequests) {
       setMessages([...messages, {
         role: 'assistant',
@@ -68,7 +65,7 @@ const ChatAssistant: React.FC = () => {
         },
         body: JSON.stringify({
           messages: newMessages,
-          userId: user?.id // ← ДОБАВИТЬ: отправляем userId для учета запросов
+          userId: user?.id
         })
       });
 
@@ -112,21 +109,20 @@ const ChatAssistant: React.FC = () => {
     <>
       {!isOpen && (
         <button
-          className="chat-assistant-button"
+          className="plant-assistant-btn"
           onClick={() => setIsOpen(true)}
           aria-label="Открыть чат"
         >
-          🤖 AI
+          🌿Ai
         </button>
       )}
 
       {isOpen && (
-        <div className="chat-assistant-container">
-          <div className="chat-assistant-header">
+        <div className="plant-assistant-container">
+          <div className="plant-assistant-header">
             <div>
-              <div className="chat-assistant-title">Растительный AI</div>
-              <div className="chat-assistant-status">● Онлайн</div>
-              {/* ← ДОБАВИТЬ: Показываем лимит запросов */}
+              <div className="plant-assistant-title">Растительный AI</div>
+              <div className="plant-assistant-status">● Онлайн</div>
               {isAuthenticated && userSubscription && (
                 <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '4px' }}>
                   Запросов: {userSubscription.usedRequests}/{userSubscription.dailyRequests}
@@ -134,7 +130,7 @@ const ChatAssistant: React.FC = () => {
               )}
             </div>
             <button
-              className="chat-assistant-close"
+              className="plant-assistant-close"
               onClick={() => setIsOpen(false)}
               aria-label="Закрыть"
             >
@@ -142,30 +138,34 @@ const ChatAssistant: React.FC = () => {
             </button>
           </div>
 
-          <div className="chat-assistant-messages">
+          <div className="plant-assistant-messages">
             {messages.map((msg, index) => (
-              <div key={index} className={`chat-message chat-message-${msg.role}`}>
-                <div className="chat-message-avatar">
-                  {msg.role === 'user' ? '👤' : '🤖'}
+              <div key={index} className={`plant-assistant-message ${msg.role}`}>
+                <div className="plant-assistant-message-avatar">
+                  {msg.role === 'user' ? '👤' : '🌿'}
                 </div>
-                <div className="chat-message-content">{msg.content}</div>
+                <div className="plant-assistant-message-content">{msg.content}</div>
               </div>
             ))}
 
             {isLoading && (
-              <div className="chat-message chat-message-assistant">
-                <div className="chat-message-avatar">🤖</div>
-                <div className="chat-message-loading">...</div>
+              <div className="plant-assistant-message assistant">
+                <div className="plant-assistant-message-avatar">🌿</div>
+                <div className="plant-assistant-message-loading">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
               </div>
             )}
 
             {messages.length === 1 && (
-              <div className="chat-quick-questions">
-                <div className="chat-quick-title">Популярные вопросы:</div>
+              <div className="plant-assistant-quick-questions">
+                <div className="plant-assistant-quick-questions-title">Популярные вопросы:</div>
                 {quickQuestions.map((question, index) => (
                   <button
                     key={index}
-                    className="chat-quick-question"
+                    className="plant-assistant-quick-question-btn"
                     onClick={() => {
                       setInputValue(question);
                       setTimeout(() => sendMessage(), 100);
@@ -180,7 +180,7 @@ const ChatAssistant: React.FC = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="chat-assistant-input-container">
+          <div className="plant-assistant-input-container">
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
@@ -188,10 +188,10 @@ const ChatAssistant: React.FC = () => {
               placeholder="Задайте вопрос о растениях..."
               rows={1}
               disabled={isLoading}
-              className="chat-input"
+              className="plant-assistant-input"
             />
             <button
-              className="chat-send-button"
+              className="plant-assistant-send-btn"
               onClick={sendMessage}
               disabled={isLoading || !inputValue.trim()}
             >
@@ -199,7 +199,7 @@ const ChatAssistant: React.FC = () => {
             </button>
           </div>
 
-          <div className="chat-assistant-footer">Powered by GigaChat AI</div>
+          <div className="plant-assistant-footer">Powered by GigaChat AI</div>
         </div>
       )}
     </>
