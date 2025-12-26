@@ -980,30 +980,35 @@ app.post('/api/feedback/init', async (req, res) => {
 // Получить все отзывы (для совместимости)
 app.get('/api/feedback', async (req, res) => {
   try {
-    console.log('📋 Запрос к /api/feedback');
+    console.log('📋 GET /api/feedback');
+    const result = await pool.query(`
+      SELECT 
+        id, 
+        name,
+        email,
+        message,
+        rating,
+        created_at
+      FROM feedback 
+      ORDER BY created_at DESC
+    `);
     
-    const result = await pool.query(
-      `SELECT id, author_name AS authorname, author_role AS authorrole, 
-              comment, created_at AS createdat 
-       FROM feedback 
-       ORDER BY created_at DESC`
-    );
-
-    console.log(`✅ Получено ${result.rows.length} отзывов`);
-
+    console.log(`✅ ${result.rows.length} feedbacks found`);
+    
     const feedbacks = result.rows.map(row => ({
       id: row.id,
-      authorName: row.authorname,
-      authorRole: row.authorrole,
-      comment: row.comment,
-      createdAt: row.createdat
+      authorName: row.name || 'Пользователь',
+      authorRole: row.email,  // можно убрать если не нужно
+      comment: row.message,
+      rating: row.rating || 5,
+      createdAt: row.created_at
     }));
-
+    
     res.json(feedbacks);
   } catch (error) {
-    console.error('❌ Ошибка получения отзывов:', error.message);
+    console.error('❌ Error fetching feedbacks:', error.message);
     res.status(500).json({ 
-      error: 'Не удалось получить отзывы',
+      error: 'Failed to load feedbacks', 
       details: error.message 
     });
   }
