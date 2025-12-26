@@ -516,3 +516,14 @@
   }
 }
 
+.subscription-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.subscription-button:disabled:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
